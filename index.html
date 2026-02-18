@@ -25,10 +25,26 @@
         }
         .control-panel h2 {
             font-size: 15px;
-            margin-bottom: 12px;
+            margin-bottom: 0;
             color: #1a1a2e;
             letter-spacing: -0.3px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+            -webkit-user-select: none;
         }
+        .control-panel h2:hover { opacity: 0.7; }
+        .control-panel-toggle {
+            font-size: 11px;
+            transition: transform 0.2s;
+            margin-left: 8px;
+        }
+        .control-panel.collapsed .control-panel-toggle { transform: rotate(-90deg); }
+        .control-panel.collapsed .control-panel-body { display: none; }
+        .control-panel:not(.collapsed) h2 { margin-bottom: 12px; }
+        .control-panel.collapsed { min-width: 0; }
         .control-group {
             margin-bottom: 10px;
             display: flex;
@@ -159,7 +175,7 @@
         .popup-cam-link:hover { background: #0277bd; }
 
         /* ---- Marker helpers ---- */
-        .wind-arrow, .station-label, .isobar-label, .wave-badge {
+        .wind-arrow, .station-label, .isobar-label, .wave-badge, .gps-marker {
             background: none !important; border: none !important; overflow: visible !important;
         }
 
@@ -349,8 +365,79 @@
         }
         .route-warning-popup .leaflet-popup-tip { background: #fff3e0; }
 
+        /* ---- Hazard markers ---- */
+        .route-btn-hazards { background: #e65100; color: #fff; min-width: 100%; }
+        .route-btn-hazards:hover:not(:disabled) { background: #bf360c; }
+        .route-btn-hazards.active { background: #d32f2f; }
+        .hazard-popup .leaflet-popup-content-wrapper {
+            background: #fff3e0; border: 2px solid #e65100; border-radius: 8px;
+        }
+        .hazard-popup .leaflet-popup-content {
+            margin: 8px 12px; font-size: 12px; color: #333;
+        }
+        .hazard-popup .leaflet-popup-tip { background: #fff3e0; }
+        .hazard-title { font-weight: 700; font-size: 13px; color: #bf360c; margin-bottom: 4px; }
+        .hazard-detail { margin-bottom: 2px; }
+        .hazard-detail strong { color: #e65100; }
+
+        /* ---- Tracking Panel ---- */
+        .track-panel {
+            position: absolute;
+            top: 80px;
+            left: 240px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(8px);
+            min-width: 200px;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .track-panel-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 14px; cursor: grab; user-select: none;
+            background: rgba(76, 175, 80, 0.1);
+            border-bottom: 1px solid rgba(76, 175, 80, 0.2);
+        }
+        .track-panel-header:active { cursor: grabbing; }
+        .track-panel-header:hover { background: rgba(76, 175, 80, 0.18); }
+        .track-panel-header h3 {
+            font-size: 13px; font-weight: 600; color: #2e7d32; margin: 0;
+        }
+        .track-panel-toggle {
+            font-size: 14px; color: #2e7d32; transition: transform 0.3s;
+        }
+        .track-panel.collapsed .track-panel-toggle { transform: rotate(-90deg); }
+        .track-panel-body { padding: 12px 14px; }
+        .track-panel.collapsed .track-panel-body { display: none; }
+        .track-buttons { display: flex; flex-wrap: wrap; gap: 4px; }
+        .track-btn {
+            flex: 1; min-width: 80px; padding: 6px 8px;
+            border: none; border-radius: 5px;
+            font-size: 11px; font-weight: 600; cursor: pointer;
+            transition: background 0.2s, opacity 0.2s;
+        }
+        .track-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .track-btn-start { background: #43a047; color: #fff; }
+        .track-btn-start:hover:not(:disabled) { background: #388e3c; }
+        .track-btn-start.active { background: #e65100; }
+        .track-btn-start.active:hover { background: #bf360c; }
+        .track-btn-stop { background: #e53935; color: #fff; }
+        .track-btn-stop:hover:not(:disabled) { background: #c62828; }
+        .track-btn-mark { background: #1565c0; color: #fff; min-width: 100%; }
+        .track-btn-mark:hover:not(:disabled) { background: #0d47a1; }
+        .track-btn-clear { background: #e0e0e0; color: #555; }
+        .track-btn-clear:hover:not(:disabled) { background: #ccc; }
+        .track-status {
+            font-size: 10px; margin-top: 8px; line-height: 1.4; color: #888;
+        }
+        .track-status.active { color: #43a047; }
+        .track-pin-marker { background: none !important; border: none !important; }
+
         @media (max-width: 600px) {
             .route-panel { top: 60px; left: 5px; min-width: 180px; }
+            .track-panel { top: 60px; left: auto; right: 5px; min-width: 170px; }
         }
 
         /* Boat marker */
@@ -368,26 +455,72 @@
         .boat-wind-angle { font-size: 14px; margin-top: 4px; }
         .boat-wind-speed { font-size: 11px; color: #aab; margin-top: 2px; }
         .boat-hint { font-size: 9px; color: #778; margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 4px; }
+
+        /* ---- SOG / COG Display ---- */
+        .sog-cog-display {
+            display: none;
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            border-radius: 8px;
+            padding: 6px 16px;
+            backdrop-filter: blur(8px);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        .sog-cog-display.visible { display: flex; gap: 16px; align-items: center; }
+        .sog-cog-item {
+            display: flex; align-items: baseline; gap: 4px;
+        }
+        .sog-cog-label {
+            font-size: 10px; font-weight: 600; opacity: 0.6; text-transform: uppercase;
+        }
+        .sog-cog-value {
+            font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums;
+        }
+        .sog-cog-unit {
+            font-size: 10px; opacity: 0.6; margin-left: 2px;
+        }
     </style>
 </head>
 <body>
     <div id="map"></div>
 
-    <div class="control-panel">
-        <h2>Israel Coast Wind &amp; Waves</h2>
-        <div class="control-group">
-            <label for="interval">Refresh every</label>
-            <input type="number" id="interval" value="5" min="1" max="60" step="1">
-            <span>min</span>
+    <div class="sog-cog-display" id="sogCogDisplay">
+        <div class="sog-cog-item">
+            <span class="sog-cog-label">SOG</span>
+            <span class="sog-cog-value" id="sogValue">0.0</span>
+            <span class="sog-cog-unit">kts</span>
         </div>
-        <button class="btn-refresh" id="refreshBtn" onclick="refreshData()">Refresh Now</button>
-        <button class="btn-refresh" id="pauseBtn" onclick="togglePause()" style="background:#78909c;margin-left:4px">Pause</button>
-        <div class="status" id="status">Initializing...</div>
-        <div class="countdown" id="countdown"></div>
-        <div class="api-key-section" id="apiKeySection">
-            <label for="geminiKey">Gemini API Key (AI wave estimate)</label>
-            <input type="password" id="geminiKey" placeholder="Paste your Gemini API key">
-            <div class="key-status" id="keyStatus"></div>
+        <div class="sog-cog-item">
+            <span class="sog-cog-label">COG</span>
+            <span class="sog-cog-value" id="cogValue">---</span>
+            <span class="sog-cog-unit">&deg;</span>
+        </div>
+    </div>
+
+    <div class="control-panel collapsed" id="controlPanel">
+        <h2 onclick="document.getElementById('controlPanel').classList.toggle('collapsed')">Israel Coast Wind &amp; Waves <span class="control-panel-toggle">&#9660;</span></h2>
+        <div class="control-panel-body">
+            <div class="control-group">
+                <label for="interval">Refresh every</label>
+                <input type="number" id="interval" value="5" min="1" max="60" step="1">
+                <span>min</span>
+            </div>
+            <button class="btn-refresh" id="refreshBtn" onclick="refreshData()">Refresh Now</button>
+            <button class="btn-refresh" id="pauseBtn" onclick="togglePause()" style="background:#78909c;margin-left:4px">Pause</button>
+            <div class="status" id="status">Initializing...</div>
+            <div class="countdown" id="countdown"></div>
+            <div class="api-key-section" id="apiKeySection">
+                <label for="geminiKey">Gemini API Key (AI wave estimate)</label>
+                <input type="password" id="geminiKey" placeholder="Paste your Gemini API key">
+                <div class="key-status" id="keyStatus"></div>
+            </div>
         </div>
     </div>
 
@@ -432,6 +565,7 @@
                 <button class="route-btn route-btn-draw" id="rDrawBtn" onclick="toggleRouteDraw()">Draw Route</button>
                 <button class="route-btn route-btn-clear" id="rClearBtn" onclick="clearRoute()" disabled>Clear</button>
                 <button class="route-btn route-btn-auto" id="rAutoBtn" onclick="autoCorrectRoute()" disabled>Auto-Correct Route</button>
+                <button class="route-btn route-btn-hazards" id="rHazardsBtn" onclick="showRouteHazards()" disabled style="display:none">Show Hazards</button>
                 <button class="route-btn route-btn-export" id="rExportBtn" onclick="exportRouteGPX()" disabled>Export GPX</button>
             </div>
             <div class="route-summary" id="routeSummary" style="display:none">
@@ -440,6 +574,33 @@
                 <div><strong>Waypoints:</strong> <span id="rWpCount">0</span></div>
             </div>
             <div class="route-status" id="routeStatus"></div>
+        </div>
+    </div>
+
+    <!-- Tracking Panel -->
+    <div class="track-panel collapsed" id="trackPanel">
+        <div class="track-panel-header" id="trackPanelHeader">
+            <span class="route-panel-drag-hint">&#9776;</span>
+            <h3 style="flex:1">Tracking</h3>
+            <span class="track-panel-toggle">&#9660;</span>
+        </div>
+        <div class="track-panel-body">
+            <div class="track-buttons">
+                <button class="track-btn track-btn-start" id="tStartBtn" onclick="startTrack()">Start</button>
+                <button class="track-btn track-btn-stop" id="tStopBtn" onclick="stopTrack()" disabled>Stop</button>
+            </div>
+            <div class="track-buttons" style="margin-top:4px">
+                <button class="track-btn track-btn-mark" id="tMarkBtn" onclick="markTrackPosition()" disabled>Mark Position</button>
+            </div>
+            <div class="track-buttons" style="margin-top:4px">
+                <button class="track-btn track-btn-clear" id="tClearBtn" onclick="clearTrack()" disabled>Clear</button>
+            </div>
+            <div class="route-field" style="margin-top:8px">
+                <label for="tLeadLine" style="min-width:0;font-size:11px;color:#555">Lead line</label>
+                <input type="number" id="tLeadLine" value="0" min="0" max="100" step="0.5" style="flex:1;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px;max-width:60px">
+                <span style="font-size:10px;color:#888">nm</span>
+            </div>
+            <div class="track-status" id="trackStatus">Stopped</div>
         </div>
     </div>
 
@@ -623,6 +784,8 @@
         var aiWaveLayer = L.layerGroup();
         var routeLayer = L.layerGroup();
         var boatLayer = L.layerGroup();
+        var gpsLayer = L.layerGroup().addTo(map);
+        var trackLayer = L.layerGroup().addTo(map);
         var legendToggle = L.layerGroup().addTo(map); // dummy layer to toggle legend panel
 
         L.control.layers({
@@ -637,6 +800,8 @@
             'AI Wave Estimate': aiWaveLayer,
             'Route': routeLayer,
             'Boat': boatLayer,
+            'My Location': gpsLayer,
+            'Track': trackLayer,
             'Legend': legendToggle
         }, { position: 'bottomright', collapsed: true }).addTo(map);
 
@@ -731,6 +896,27 @@
         // APIs — Open-Meteo (free, no key)
         // ============================================================
 
+        function fetchWithRetry(url, label, maxRetries) {
+            maxRetries = maxRetries || 3;
+            var attempt = 0;
+            function tryFetch() {
+                return fetch(url).then(function (r) {
+                    if (r.status === 429 && attempt < maxRetries) {
+                        attempt++;
+                        var delay = attempt * 2000;  // 2s, 4s, 6s
+                        console.log(label + ': rate-limited, retry ' + attempt + '/' + maxRetries + ' in ' + (delay / 1000) + 's');
+                        return new Promise(function (resolve) { setTimeout(resolve, delay); }).then(tryFetch);
+                    }
+                    if (r.status === 429) {
+                        throw new Error(label + ' unavailable — rate-limited after ' + maxRetries + ' retries');
+                    }
+                    if (!r.ok) throw new Error(label + ' ' + r.status);
+                    return r.json();
+                });
+            }
+            return tryFetch();
+        }
+
         function fetchStationData() {
             var lats = STATIONS.map(function (s) { return s.lat; }).join(',');
             var lons = STATIONS.map(function (s) { return s.lon; }).join(',');
@@ -741,9 +927,9 @@
                 '&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m,surface_pressure' +
                 '&wind_speed_unit=kn&timezone=auto';
 
-            return fetch(url)
-                .then(function (r) { if (!r.ok) throw new Error('Station API ' + r.status); return r.json(); })
-                .then(function (d) { return Array.isArray(d) ? d : [d]; });
+            return fetchWithRetry(url, 'Station API')
+                .then(function (d) { return Array.isArray(d) ? d : [d]; })
+                .catch(function (err) { console.warn('Station fetch failed:', err.message); return null; });
         }
 
         function fetchMarineData() {
@@ -756,9 +942,9 @@
                 '&current=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period' +
                 '&timezone=auto';
 
-            return fetch(url)
-                .then(function (r) { if (!r.ok) throw new Error('Marine API ' + r.status); return r.json(); })
-                .then(function (d) { return Array.isArray(d) ? d : [d]; });
+            return fetchWithRetry(url, 'Marine API')
+                .then(function (d) { return Array.isArray(d) ? d : [d]; })
+                .catch(function (err) { console.warn('Marine fetch failed:', err.message); return null; });
         }
 
         function fetchPressureGrid() {
@@ -774,8 +960,7 @@
                 '&longitude=' + lons.join(',') +
                 '&current=surface_pressure&timezone=auto';
 
-            return fetch(url)
-                .then(function (r) { if (!r.ok) throw new Error('Grid API ' + r.status); return r.json(); })
+            return fetchWithRetry(url, 'Grid API')
                 .then(function (data) {
                     if (!Array.isArray(data)) data = [data];
                     var grid = [];
@@ -787,7 +972,8 @@
                         grid.push(row);
                     }
                     return grid;
-                });
+                })
+                .catch(function (err) { console.warn('Pressure grid fetch failed:', err.message); return null; });
         }
 
         // ============================================================
@@ -801,7 +987,9 @@
             latestMarineData = marineData;
 
             stationData.forEach(function (data, idx) {
+                try {
                 var station = STATIONS[idx];
+                if (!data || !data.current) return;
                 var cur = data.current;
                 var speed = cur.wind_speed_10m;
                 var dir = cur.wind_direction_10m;
@@ -936,6 +1124,7 @@
                         })
                     }).bindPopup(html, { maxWidth: 280 }));
                 }
+                } catch (e) { console.warn('Station ' + (station ? station.name : idx) + ' skipped:', e.message); }
             });
         }
 
@@ -1257,27 +1446,55 @@
             statusEl.className = 'status loading';
             statusEl.textContent = 'Fetching wind, wave & pressure data...';
 
-            Promise.all([fetchStationData(), fetchMarineData(), fetchPressureGrid()])
-                .then(function (results) {
-                    displayStationData(results[0], results[1]);
-                    displayIsobars(results[2]);
-                    updateBoatPopup();
+            // Wind stations + marine fire first; pressure grid waits for station data
+            // to finish since both share api.open-meteo.com (avoids 429)
+            var stationPromise = fetchStationData();
+            var marinePromise = fetchMarineData();
+            var pressurePromise = stationPromise.then(function () {
+                return new Promise(function (resolve) { setTimeout(resolve, 500); });
+            }).then(function () { return fetchPressureGrid(); });
 
-                    statusEl.className = 'status ok';
-                    statusEl.textContent = 'Updated: ' + new Date().toLocaleTimeString();
+            Promise.all([stationPromise, marinePromise, pressurePromise])
+                .then(function (results) {
+                    var stationData = results[0];
+                    var marineData = results[1];
+                    var pressureGrid = results[2];
+                    var warnings = [];
+
+                    if (stationData) {
+                        displayStationData(stationData, marineData || []);
+                    } else {
+                        warnings.push('wind');
+                    }
+                    if (pressureGrid) {
+                        displayIsobars(pressureGrid);
+                    } else {
+                        warnings.push('pressure');
+                    }
+                    if (!marineData) warnings.push('wave');
+
+                    updateBoatPopup();
 
                     var intervalMin = parseInt(document.getElementById('interval').value) || 5;
                     nextRefreshTime = Date.now() + intervalMin * 60 * 1000;
+
+                    if (warnings.length === 0) {
+                        statusEl.className = 'status ok';
+                        statusEl.textContent = 'Updated: ' + new Date().toLocaleTimeString();
+                    } else if (warnings.length < 3) {
+                        statusEl.className = 'status ok';
+                        statusEl.textContent = 'Updated: ' + new Date().toLocaleTimeString() +
+                            ' (' + warnings.join(', ') + ' data unavailable)';
+                    } else {
+                        statusEl.className = 'status error';
+                        statusEl.textContent = 'Data unavailable — server rate limit. Try again shortly.';
+                        alert('Weather data is not available at this time.\nThe server is rate-limiting requests. Please try again in a few minutes.');
+                    }
 
                     // Trigger first AI estimate after initial data load
                     if (!aiRefreshTimer && getGeminiApiKey()) {
                         fetchAiWaveEstimate().then(function () { setupAiRefresh(); });
                     }
-                })
-                .catch(function (err) {
-                    console.error('Refresh error:', err);
-                    statusEl.className = 'status error';
-                    statusEl.textContent = 'Error: ' + err.message;
                 })
                 .finally(function () {
                     isLoading = false;
@@ -1582,7 +1799,8 @@
             markers: [],       // Array of L.Marker (draggable waypoints)
             labels: [],        // Array of L.Marker (distance label divIcons)
             polyline: null,    // L.Polyline
-            isAutoCorrecting: false
+            isAutoCorrecting: false,
+            hazardMarkers: []  // Array of L.CircleMarker (hazard indicators)
         };
 
         function toggleRoutePanel() {
@@ -1899,6 +2117,7 @@
             routeState.markers = [];
             routeState.labels = [];
             routeState.polyline = null;
+            routeState.hazardMarkers = [];
             routeLayer.clearLayers();
             map.getContainer().style.cursor = '';
             map.doubleClickZoom.enable();
@@ -1909,10 +2128,132 @@
             document.getElementById('rClearBtn').disabled = true;
             document.getElementById('rAutoBtn').disabled = true;
             document.getElementById('rExportBtn').disabled = true;
+            var hazBtn = document.getElementById('rHazardsBtn');
+            hazBtn.style.display = 'none';
+            hazBtn.disabled = true;
+            hazBtn.classList.remove('active');
             document.getElementById('routeSummary').style.display = 'none';
             setRouteStatus('', '');
         }
         window.clearRoute = clearRoute;
+
+        // ---- Hazard marker functions ----
+
+        function clearHazardMarkers() {
+            routeState.hazardMarkers.forEach(function (m) {
+                routeLayer.removeLayer(m);
+            });
+            routeState.hazardMarkers = [];
+            document.getElementById('rHazardsBtn').classList.remove('active');
+        }
+
+        function showRouteHazards() {
+            var wps = routeState.waypoints;
+            if (wps.length < 2) return;
+
+            // Toggle off if already showing
+            if (routeState.hazardMarkers.length > 0) {
+                clearHazardMarkers();
+                setRouteStatus('Hazard markers cleared.', 'info');
+                return;
+            }
+
+            var params = getRouteParams();
+            var checkDepth = document.getElementById('rDepthCheck').checked;
+            var minDepth = checkDepth ? (params.draft + params.safety) : 0;
+
+            var hazBtn = document.getElementById('rHazardsBtn');
+            hazBtn.disabled = true;
+            setRouteStatus('Scanning route for hazards...', 'info');
+
+            // Fetch depth profiles for all segments in parallel
+            var profilePromises = [];
+            for (var i = 0; i < wps.length - 1; i++) {
+                (function (idx) {
+                    profilePromises.push(
+                        fetchDepthProfile([wps[idx], wps[idx + 1]])
+                            .then(function (depths) { return { index: idx, depths: depths }; })
+                    );
+                })(i);
+            }
+
+            Promise.all(profilePromises).then(function (results) {
+                var hazardCount = 0;
+
+                results.forEach(function (seg) {
+                    var depths = seg.depths;
+                    if (!depths || !depths.length) return;
+                    var a = wps[seg.index];
+                    var b = wps[seg.index + 1];
+                    var zones = findDangerZones(depths, minDepth);
+
+                    zones.forEach(function (zone) {
+                        hazardCount++;
+
+                        // Midpoint of danger zone
+                        var midIdx = Math.round((zone.start + zone.end) / 2);
+                        var midFrac = midIdx / (depths.length - 1);
+                        var hazardPos = interpolateLatLng(a, b, midFrac);
+
+                        // Shallowest (worst) depth in zone
+                        var worstDepth = -Infinity;
+                        for (var d = zone.start; d <= zone.end; d++) {
+                            if (depths[d] > worstDepth) worstDepth = depths[d];
+                        }
+
+                        var isLand = worstDepth >= 0;
+                        var actualDepth = isLand ? 0 : Math.abs(worstDepth);
+                        var hazardType = isLand ? 'Land / Rock' : 'Shallow Water';
+                        var markerColor = isLand ? '#d32f2f' : '#e65100';
+
+                        // Hazard extent
+                        var spanFrac = (zone.end - zone.start) / (depths.length - 1);
+                        var spanNM = distanceNM(a, b) * spanFrac;
+
+                        var circle = L.circleMarker(hazardPos, {
+                            radius: 10,
+                            fillColor: markerColor,
+                            fillOpacity: 0.8,
+                            color: '#fff',
+                            weight: 2,
+                            opacity: 1
+                        });
+
+                        var popupHtml =
+                            '<div class="hazard-title">\u26A0 ' + hazardType + '</div>' +
+                            '<div class="hazard-detail"><strong>Actual depth:</strong> ' +
+                            (isLand ? 'Above water (land)' : actualDepth.toFixed(1) + ' m') + '</div>' +
+                            '<div class="hazard-detail"><strong>Required clearance:</strong> ' +
+                            minDepth.toFixed(1) + ' m (draft ' + params.draft + 'm + safety ' + params.safety + 'm)</div>' +
+                            (isLand ? '' :
+                                '<div class="hazard-detail"><strong>Deficit:</strong> ' +
+                                (minDepth - actualDepth).toFixed(1) + ' m</div>') +
+                            '<div class="hazard-detail"><strong>Hazard extent:</strong> ~' +
+                            (spanNM < 0.1 ? (spanNM * 1852).toFixed(0) + ' m' : spanNM.toFixed(1) + ' nm') + '</div>' +
+                            '<div class="hazard-detail" style="color:#888;font-size:10px;margin-top:4px">' +
+                            'Segment ' + (seg.index + 1) + ' of ' + (wps.length - 1) + '</div>';
+
+                        circle.bindPopup(popupHtml, { className: 'hazard-popup', maxWidth: 240 });
+                        routeLayer.addLayer(circle);
+                        routeState.hazardMarkers.push(circle);
+                    });
+                });
+
+                hazBtn.disabled = false;
+                hazBtn.classList.add('active');
+
+                if (hazardCount === 0) {
+                    setRouteStatus('No hazards found along route.', 'ok');
+                } else {
+                    setRouteStatus(hazardCount + ' hazard(s) marked. Click markers for details.', 'error');
+                }
+            }).catch(function (err) {
+                console.error('Show hazards error:', err);
+                setRouteStatus('Error scanning for hazards: ' + err.message, 'error');
+                hazBtn.disabled = false;
+            });
+        }
+        window.showRouteHazards = showRouteHazards;
 
         // Map click handler for route drawing
         map.on('click', function (e) {
@@ -2002,6 +2343,9 @@
         function autoCorrectRoute() {
             if (routeState.waypoints.length < 2 || routeState.isAutoCorrecting) return;
             routeState.isAutoCorrecting = true;
+            clearHazardMarkers();
+            var hazBtn = document.getElementById('rHazardsBtn');
+            hazBtn.style.display = 'none';
 
             var params = getRouteParams();
             var checkDepth = document.getElementById('rDepthCheck').checked;
@@ -2023,10 +2367,14 @@
                         setRouteStatus('Warning: ' + result.warning, 'error');
                         L.popup({ closeButton: true, autoClose: false, className: 'route-warning-popup' })
                             .setLatLng(map.getCenter())
-                            .setContent('<strong>⚠ Route Warning</strong><br>' + result.warning)
+                            .setContent('<strong>\u26A0 Route Warning</strong><br>' + result.warning +
+                                '<br><em style="font-size:11px;color:#555">Click "Show Hazards" to see obstacle locations.</em>')
                             .openOn(map);
+                        hazBtn.style.display = '';
+                        hazBtn.disabled = false;
                     } else if (result.corrected) {
                         rebuildRoute(result.waypoints);
+                        hazBtn.style.display = 'none';
                         setRouteStatus(
                             checkDepth
                                 ? 'Route corrected: avoiding land & areas shallower than ' + minDepth.toFixed(1) + 'm.'
@@ -2034,6 +2382,7 @@
                             'ok'
                         );
                     } else {
+                        hazBtn.style.display = 'none';
                         setRouteStatus(
                             checkDepth
                                 ? 'Route is safe! No land crossings, all depths exceed ' + minDepth.toFixed(1) + 'm.'
@@ -2047,8 +2396,11 @@
                     setRouteStatus('Error: ' + err.message, 'error');
                     L.popup({ closeButton: true, autoClose: false, className: 'route-warning-popup' })
                         .setLatLng(map.getCenter())
-                        .setContent('<strong>⚠ Route Error</strong><br>' + err.message)
+                        .setContent('<strong>\u26A0 Route Error</strong><br>' + err.message +
+                            '<br><em style="font-size:11px;color:#555">You can try "Show Hazards" to scan for obstacles.</em>')
                         .openOn(map);
+                    hazBtn.style.display = '';
+                    hazBtn.disabled = false;
                 })
                 .finally(function () {
                     routeState.isAutoCorrecting = false;
@@ -2342,6 +2694,417 @@
 
             updateRouteLabels();
         }
+
+        // ============================================================
+        // GPS LOCATION TRACKING (mobile)
+        // ============================================================
+
+        var gpsMarker = null;
+        var gpsAccuracyCircle = null;
+        var gpsWatchId = null;
+        var gpsPrevPos = null;       // { lat, lon, time }
+        var gpsIsMoving = false;
+        var gpsHeading = 0;
+        var gpsSogKts = 0;
+        var GPS_MOVE_THRESHOLD = 5;  // meters — below this considered stationary
+        var gpsLeadLine = null;      // L.Polyline for leading line
+
+        function isMobileDevice() {
+            return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 768);
+        }
+
+        function distanceMeters(lat1, lon1, lat2, lon2) {
+            var R = 6371000;
+            var dLat = (lat2 - lat1) * Math.PI / 180;
+            var dLon = (lon2 - lon1) * Math.PI / 180;
+            var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+
+        function bearingDeg(lat1, lon1, lat2, lon2) {
+            var dLon = (lon2 - lon1) * Math.PI / 180;
+            var r1 = lat1 * Math.PI / 180, r2 = lat2 * Math.PI / 180;
+            var y = Math.sin(dLon) * Math.cos(r2);
+            var x = Math.cos(r1) * Math.sin(r2) - Math.sin(r1) * Math.cos(r2) * Math.cos(dLon);
+            return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+        }
+
+        function createGpsStationaryIcon() {
+            var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
+                '<circle cx="12" cy="12" r="10" fill="rgba(66,133,244,0.15)" stroke="none">' +
+                '<animate attributeName="r" values="8;11;8" dur="2s" repeatCount="indefinite"/>' +
+                '<animate attributeName="opacity" values="0.3;0.1;0.3" dur="2s" repeatCount="indefinite"/>' +
+                '</circle>' +
+                '<circle cx="12" cy="12" r="6" fill="#4285F4" stroke="#fff" stroke-width="2"/>' +
+                '</svg>';
+            return L.divIcon({
+                html: svg,
+                className: 'gps-marker',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+        }
+
+        function createGpsMovingIcon(heading) {
+            var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 40 40" ' +
+                'style="transform:rotate(' + heading + 'deg)">' +
+                '<path d="M20 4 L28 34 L20 28 L12 34 Z" fill="#4285F4" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>' +
+                '<line x1="20" y1="4" x2="20" y2="16" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>' +
+                '</svg>';
+            return L.divIcon({
+                html: svg,
+                className: 'gps-marker',
+                iconSize: [32, 32],
+                iconAnchor: [16, 16]
+            });
+        }
+
+        function destinationPoint(lat, lon, bearingDegrees, distMeters) {
+            var R = 6371000;
+            var brng = bearingDegrees * Math.PI / 180;
+            var lat1 = lat * Math.PI / 180;
+            var lon1 = lon * Math.PI / 180;
+            var lat2 = Math.asin(Math.sin(lat1) * Math.cos(distMeters / R) +
+                Math.cos(lat1) * Math.sin(distMeters / R) * Math.cos(brng));
+            var lon2 = lon1 + Math.atan2(
+                Math.sin(brng) * Math.sin(distMeters / R) * Math.cos(lat1),
+                Math.cos(distMeters / R) - Math.sin(lat1) * Math.sin(lat2));
+            return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
+        }
+
+        function updateLeadLine(lat, lon) {
+            var nmVal = parseFloat(document.getElementById('tLeadLine').value) || 0;
+            if (nmVal > 0 && gpsIsMoving) {
+                var distM = nmVal * 1852; // nm to meters
+                var endPt = destinationPoint(lat, lon, gpsHeading, distM);
+                if (gpsLeadLine) {
+                    gpsLeadLine.setLatLngs([[lat, lon], endPt]);
+                } else {
+                    gpsLeadLine = L.polyline([[lat, lon], endPt], {
+                        color: '#4285F4', weight: 2, opacity: 0.6,
+                        dashArray: '8, 6'
+                    });
+                    gpsLayer.addLayer(gpsLeadLine);
+                }
+            } else {
+                if (gpsLeadLine) {
+                    gpsLayer.removeLayer(gpsLeadLine);
+                    gpsLeadLine = null;
+                }
+            }
+        }
+
+        function updateSogCogDisplay() {
+            var el = document.getElementById('sogCogDisplay');
+            el.classList.add('visible');
+            document.getElementById('sogValue').textContent = gpsSogKts.toFixed(1);
+            document.getElementById('cogValue').textContent = gpsIsMoving
+                ? Math.round(gpsHeading) + '\u00B0 ' + dirToCompass(gpsHeading)
+                : '---';
+        }
+
+        function updateGpsPosition(lat, lon, accuracy) {
+            // Detect movement and compute SOG/COG
+            var now = Date.now();
+            var moving = false;
+            if (gpsPrevPos) {
+                var dist = distanceMeters(gpsPrevPos.lat, gpsPrevPos.lon, lat, lon);
+                var dtSec = (now - gpsPrevPos.time) / 1000;
+                if (dist > GPS_MOVE_THRESHOLD && dtSec > 0) {
+                    gpsHeading = bearingDeg(gpsPrevPos.lat, gpsPrevPos.lon, lat, lon);
+                    gpsSogKts = (dist / dtSec) * 1.94384; // m/s to knots
+                    moving = true;
+                } else {
+                    gpsSogKts = 0;
+                }
+            }
+            gpsPrevPos = { lat: lat, lon: lon, time: now };
+
+            var iconChanged = moving !== gpsIsMoving || (moving && gpsIsMoving);
+            gpsIsMoving = moving;
+            updateSogCogDisplay();
+
+            var icon = moving ? createGpsMovingIcon(gpsHeading) : createGpsStationaryIcon();
+
+            if (!gpsMarker) {
+                gpsMarker = L.marker([lat, lon], {
+                    icon: icon,
+                    zIndexOffset: 900
+                });
+                gpsLayer.addLayer(gpsMarker);
+                gpsMarker.bindPopup('<div style="text-align:center;font-size:13px;"><strong>Your Location</strong></div>');
+            } else {
+                gpsMarker.setLatLng([lat, lon]);
+                if (iconChanged) {
+                    gpsMarker.setIcon(icon);
+                }
+            }
+
+            if (accuracy && accuracy < 5000) {
+                if (!gpsAccuracyCircle) {
+                    gpsAccuracyCircle = L.circle([lat, lon], {
+                        radius: accuracy,
+                        color: '#4285F4',
+                        fillColor: '#4285F4',
+                        fillOpacity: 0.08,
+                        weight: 1,
+                        opacity: 0.3
+                    });
+                    gpsLayer.addLayer(gpsAccuracyCircle);
+                } else {
+                    gpsAccuracyCircle.setLatLng([lat, lon]);
+                    gpsAccuracyCircle.setRadius(accuracy);
+                }
+            }
+
+            updateLeadLine(lat, lon);
+        }
+
+        function startGpsTracking(centerOnFirst) {
+            if (!navigator.geolocation) return;
+            var firstFix = true;
+            gpsWatchId = navigator.geolocation.watchPosition(
+                function (pos) {
+                    updateGpsPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+                    if (firstFix && centerOnFirst) {
+                        map.setView([pos.coords.latitude, pos.coords.longitude], Math.max(map.getZoom(), 12));
+                        firstFix = false;
+                    }
+                },
+                function (err) {
+                    console.warn('GPS error:', err.message);
+                },
+                { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+            );
+        }
+
+        // Locate-me button (shown on all devices)
+        var LocateControl = L.Control.extend({
+            options: { position: 'topleft' },
+            onAdd: function () {
+                var btn = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+                btn.innerHTML = '<a href="#" title="Show my location" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;font-size:18px;text-decoration:none;color:#333;background:#fff;cursor:pointer;">&#9737;</a>';
+                btn.style.cursor = 'pointer';
+                L.DomEvent.disableClickPropagation(btn);
+                L.DomEvent.on(btn, 'click', function (e) {
+                    L.DomEvent.preventDefault(e);
+                    if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
+                    navigator.geolocation.getCurrentPosition(
+                        function (pos) {
+                            updateGpsPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+                            map.setView([pos.coords.latitude, pos.coords.longitude], Math.max(map.getZoom(), 13));
+                        },
+                        function (err) { alert('Could not get location: ' + err.message); },
+                        { enableHighAccuracy: true, timeout: 10000 }
+                    );
+                });
+                return btn;
+            }
+        });
+        map.addControl(new LocateControl());
+
+        // Auto-start continuous tracking on mobile
+        if (isMobileDevice()) {
+            startGpsTracking(false);
+        }
+
+        // ============================================================
+        // TRACKING PANEL
+        // ============================================================
+
+        var trackState = {
+            active: false,
+            watchId: null,
+            positions: [],   // Array of [lat, lon]
+            polyline: null,
+            pins: [],        // Array of L.Marker
+            pinCount: 0
+        };
+
+        function toggleTrackPanel() {
+            document.getElementById('trackPanel').classList.toggle('collapsed');
+        }
+        window.toggleTrackPanel = toggleTrackPanel;
+
+        // Draggable track panel (same pattern as route panel)
+        (function () {
+            var panel = document.getElementById('trackPanel');
+            var header = document.getElementById('trackPanelHeader');
+            var dragStartX, dragStartY, panelStartX, panelStartY, dragged;
+
+            header.addEventListener('mousedown', function (e) {
+                if (e.button !== 0) return;
+                dragged = false;
+                dragStartX = e.clientX;
+                dragStartY = e.clientY;
+                var rect = panel.getBoundingClientRect();
+                panelStartX = rect.left;
+                panelStartY = rect.top;
+                document.addEventListener('mousemove', onDragMove);
+                document.addEventListener('mouseup', onDragEnd);
+                e.preventDefault();
+            });
+
+            function onDragMove(e) {
+                var dx = e.clientX - dragStartX;
+                var dy = e.clientY - dragStartY;
+                if (!dragged && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+                dragged = true;
+                panel.style.left = Math.max(0, panelStartX + dx) + 'px';
+                panel.style.top = Math.max(0, panelStartY + dy) + 'px';
+                panel.style.right = 'auto';
+            }
+
+            function onDragEnd() {
+                document.removeEventListener('mousemove', onDragMove);
+                document.removeEventListener('mouseup', onDragEnd);
+                if (!dragged) toggleTrackPanel();
+            }
+
+            header.addEventListener('touchstart', function (e) {
+                if (e.touches.length !== 1) return;
+                dragged = false;
+                var t = e.touches[0];
+                dragStartX = t.clientX;
+                dragStartY = t.clientY;
+                var rect = panel.getBoundingClientRect();
+                panelStartX = rect.left;
+                panelStartY = rect.top;
+                document.addEventListener('touchmove', onTouchMove, { passive: false });
+                document.addEventListener('touchend', onTouchEnd);
+            });
+
+            function onTouchMove(e) {
+                var t = e.touches[0];
+                var dx = t.clientX - dragStartX;
+                var dy = t.clientY - dragStartY;
+                if (!dragged && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+                dragged = true;
+                e.preventDefault();
+                panel.style.left = Math.max(0, panelStartX + dx) + 'px';
+                panel.style.top = Math.max(0, panelStartY + dy) + 'px';
+                panel.style.right = 'auto';
+            }
+
+            function onTouchEnd() {
+                document.removeEventListener('touchmove', onTouchMove);
+                document.removeEventListener('touchend', onTouchEnd);
+                if (!dragged) toggleTrackPanel();
+            }
+        })();
+
+        function updateTrackButtons() {
+            var startBtn = document.getElementById('tStartBtn');
+            var stopBtn = document.getElementById('tStopBtn');
+            var markBtn = document.getElementById('tMarkBtn');
+            var clearBtn = document.getElementById('tClearBtn');
+            var statusEl = document.getElementById('trackStatus');
+
+            if (trackState.active) {
+                startBtn.textContent = 'Tracking...';
+                startBtn.classList.add('active');
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                markBtn.disabled = false;
+                statusEl.className = 'track-status active';
+                statusEl.textContent = 'Tracking — ' + trackState.positions.length + ' points';
+            } else {
+                startBtn.textContent = 'Start';
+                startBtn.classList.remove('active');
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                markBtn.disabled = true;
+                var hasData = trackState.positions.length > 0 || trackState.pins.length > 0;
+                clearBtn.disabled = !hasData;
+                statusEl.className = 'track-status';
+                statusEl.textContent = hasData
+                    ? 'Stopped — ' + trackState.positions.length + ' points, ' + trackState.pins.length + ' pins'
+                    : 'Stopped';
+            }
+        }
+
+        function startTrack() {
+            if (trackState.active) return;
+            if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
+
+            trackState.active = true;
+            trackState.watchId = navigator.geolocation.watchPosition(
+                function (pos) {
+                    var ll = [pos.coords.latitude, pos.coords.longitude];
+                    trackState.positions.push(ll);
+                    updateGpsPosition(ll[0], ll[1], pos.coords.accuracy);
+
+                    if (trackState.polyline) {
+                        trackState.polyline.addLatLng(ll);
+                    } else {
+                        trackState.polyline = L.polyline(trackState.positions, {
+                            color: '#43a047', weight: 3, opacity: 0.8
+                        });
+                        trackLayer.addLayer(trackState.polyline);
+                    }
+                    updateTrackButtons();
+                },
+                function (err) {
+                    console.warn('Track GPS error:', err.message);
+                    var statusEl = document.getElementById('trackStatus');
+                    statusEl.className = 'track-status';
+                    statusEl.textContent = 'GPS error: ' + err.message;
+                },
+                { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+            );
+            updateTrackButtons();
+        }
+        window.startTrack = startTrack;
+
+        function stopTrack() {
+            if (!trackState.active) return;
+            if (trackState.watchId !== null) {
+                navigator.geolocation.clearWatch(trackState.watchId);
+                trackState.watchId = null;
+            }
+            trackState.active = false;
+            updateTrackButtons();
+        }
+        window.stopTrack = stopTrack;
+
+        function markTrackPosition() {
+            if (!gpsMarker) { alert('No GPS position yet'); return; }
+            var ll = gpsMarker.getLatLng();
+            trackState.pinCount++;
+            var pinSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="30" viewBox="0 0 20 30">' +
+                '<path d="M10 0 C4.5 0 0 4.5 0 10 C0 18 10 30 10 30 S20 18 20 10 C20 4.5 15.5 0 10 0Z" fill="#e53935" stroke="#b71c1c" stroke-width="1"/>' +
+                '<circle cx="10" cy="10" r="4" fill="#fff"/>' +
+                '<text x="10" y="13" text-anchor="middle" font-size="7" font-weight="700" fill="#b71c1c">' + trackState.pinCount + '</text>' +
+                '</svg>';
+            var pin = L.marker([ll.lat, ll.lng], {
+                icon: L.divIcon({
+                    html: pinSvg,
+                    className: 'track-pin-marker',
+                    iconSize: [20, 30],
+                    iconAnchor: [10, 30]
+                })
+            });
+            pin.bindPopup('<div style="font-size:12px"><strong>Pin #' + trackState.pinCount + '</strong><br>' +
+                ll.lat.toFixed(5) + ', ' + ll.lng.toFixed(5) + '<br>' +
+                '<span style="color:#888;font-size:10px">' + new Date().toLocaleTimeString() + '</span></div>');
+            trackLayer.addLayer(pin);
+            trackState.pins.push(pin);
+            updateTrackButtons();
+        }
+        window.markTrackPosition = markTrackPosition;
+
+        function clearTrack() {
+            stopTrack();
+            trackLayer.clearLayers();
+            trackState.positions = [];
+            trackState.polyline = null;
+            trackState.pins = [];
+            trackState.pinCount = 0;
+            updateTrackButtons();
+        }
+        window.clearTrack = clearTrack;
 
         // ============================================================
         // INIT
