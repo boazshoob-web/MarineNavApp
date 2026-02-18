@@ -1,0 +1,2358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Israel Coast Wind, Waves &amp; Pressure</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+        #map { width: 100vw; height: 100vh; }
+
+        /* ---- Control Panel ---- */
+        .control-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 16px 18px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+            min-width: 230px;
+            backdrop-filter: blur(8px);
+        }
+        .control-panel h2 {
+            font-size: 15px;
+            margin-bottom: 12px;
+            color: #1a1a2e;
+            letter-spacing: -0.3px;
+        }
+        .control-group {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .control-group label {
+            font-size: 12px;
+            color: #555;
+            white-space: nowrap;
+        }
+        .control-group input[type="number"] {
+            width: 56px;
+            padding: 5px 8px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 13px;
+            text-align: center;
+        }
+        .control-group input[type="number"]:focus {
+            outline: none;
+            border-color: #4a90d9;
+            box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.2);
+        }
+        .control-group span { font-size: 12px; color: #888; }
+
+        .btn-refresh {
+            background: #4a90d9;
+            color: white;
+            border: none;
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 4px;
+            transition: background 0.2s;
+        }
+        .btn-refresh:hover { background: #3a7bc8; }
+        .btn-refresh:disabled { background: #b0b0b0; cursor: not-allowed; }
+
+        .status { font-size: 11px; color: #888; margin-top: 10px; line-height: 1.4; }
+        .status.loading { color: #4a90d9; }
+        .status.error { color: #e53935; }
+        .status.ok { color: #43a047; }
+        .countdown { font-size: 10px; color: #aaa; margin-top: 2px; }
+
+        /* ---- Legend ---- */
+        .legend {
+            position: absolute;
+            bottom: 30px;
+            left: 10px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 14px 16px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(8px);
+            max-width: 210px;
+            max-height: calc(100vh - 80px);
+            overflow-y: auto;
+        }
+        .legend h3 {
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #1a1a2e;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 2px;
+            font-size: 11px;
+            color: #555;
+        }
+        .legend-color {
+            width: 28px;
+            height: 10px;
+            margin-right: 8px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+        .legend-section {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .isobar-sample-thick {
+            display: inline-block; width: 28px; height: 2px;
+            background: #6a5acd; margin-right: 8px; vertical-align: middle;
+        }
+        .isobar-sample-thin {
+            display: inline-block; width: 28px; height: 1px;
+            background: #6a5acd; margin-right: 8px; vertical-align: middle; opacity: 0.5;
+        }
+        .cam-badge-legend {
+            display: inline-block; font-size: 9px; font-weight: 700;
+            background: #0288d1; color: #fff; padding: 1px 4px;
+            border-radius: 3px; margin-right: 6px;
+        }
+
+        /* ---- Popups ---- */
+        .wind-popup { min-width: 180px; }
+        .wind-popup .popup-name {
+            font-weight: 600; font-size: 14px;
+            margin-bottom: 6px; color: #1a1a2e;
+        }
+        .wind-popup .popup-section {
+            margin-bottom: 6px; padding-bottom: 6px;
+            border-bottom: 1px solid #eee;
+        }
+        .wind-popup .popup-section:last-child { border-bottom: none; margin-bottom: 0; }
+        .wind-popup .popup-detail {
+            font-size: 12px; color: #555; margin-bottom: 2px;
+        }
+        .wind-popup .popup-detail strong { color: #333; }
+        .wind-popup .popup-wave-height {
+            font-size: 20px; font-weight: 700; margin: 4px 0;
+        }
+        .popup-cam-links { margin-top: 4px; }
+        .popup-cam-link {
+            display: inline-block; font-size: 11px; font-weight: 600;
+            color: #fff; background: #0288d1; padding: 3px 8px;
+            border-radius: 4px; text-decoration: none; margin: 2px 2px 2px 0;
+            transition: background 0.2s;
+        }
+        .popup-cam-link:hover { background: #0277bd; }
+
+        /* ---- Marker helpers ---- */
+        .wind-arrow, .station-label, .isobar-label, .wave-badge {
+            background: none !important; border: none !important; overflow: visible !important;
+        }
+
+        /* ---- Webcam Modal ---- */
+        .webcam-overlay {
+            display: none;
+            position: fixed; top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        .webcam-overlay.active { display: flex; }
+        .webcam-box {
+            background: #fff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            width: 90vw; max-width: 800px;
+            max-height: 90vh;
+            display: flex; flex-direction: column;
+        }
+        .webcam-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 16px;
+            background: #f5f5f5; border-bottom: 1px solid #e0e0e0;
+        }
+        .webcam-header h3 { font-size: 14px; color: #333; }
+        .webcam-close {
+            background: none; border: none; font-size: 22px;
+            cursor: pointer; color: #888; line-height: 1;
+        }
+        .webcam-close:hover { color: #333; }
+        .webcam-body {
+            flex: 1; position: relative;
+            min-height: 400px;
+        }
+        .webcam-body iframe {
+            width: 100%; height: 100%;
+            min-height: 400px;
+            border: none;
+        }
+        .webcam-body .cam-fallback {
+            padding: 40px 20px;
+            text-align: center;
+            color: #666; font-size: 14px;
+        }
+        .webcam-body .cam-fallback a {
+            display: inline-block; margin-top: 12px;
+            padding: 8px 20px; background: #0288d1;
+            color: #fff; border-radius: 6px;
+            text-decoration: none; font-weight: 600;
+        }
+
+        @media (max-width: 600px) {
+            .control-panel { right: 5px; top: 5px; min-width: 180px; padding: 12px; }
+            .legend { bottom: 5px; left: 5px; padding: 10px; max-width: 170px; }
+            .webcam-box { width: 96vw; }
+            .webcam-body { min-height: 260px; }
+            .webcam-body iframe { min-height: 260px; }
+        }
+
+        /* AI Wave Estimate */
+        .ai-wave-badge { background: none !important; border: none !important; }
+        .api-key-section {
+            margin-top: 10px; padding-top: 10px; border-top: 1px solid #e0e0e0;
+        }
+        .api-key-section label {
+            font-size: 11px; color: #555; display: block; margin-bottom: 4px;
+        }
+        .api-key-section input[type="password"] {
+            width: 100%; padding: 5px 8px; border: 1px solid #ccc;
+            border-radius: 5px; font-size: 11px; margin-bottom: 4px; box-sizing: border-box;
+        }
+        .api-key-section input[type="password"]:focus {
+            outline: none; border-color: #00897b;
+            box-shadow: 0 0 0 2px rgba(0,137,123,0.2);
+        }
+        .api-key-section .key-status { font-size: 10px; color: #888; }
+        .api-key-section .key-status.saved { color: #43a047; }
+        .popup-ai-estimate {
+            background: #e0f2f1; border-radius: 6px; padding: 6px 8px; margin-top: 4px;
+        }
+        .popup-ai-estimate .ai-label {
+            font-size: 10px; color: #00695c; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .popup-ai-estimate .ai-height {
+            font-size: 18px; font-weight: 700; color: #00897b; margin: 2px 0;
+        }
+        .popup-ai-estimate .ai-confidence { font-size: 10px; color: #666; font-style: italic; }
+        .popup-ai-estimate .ai-error { font-size: 11px; color: #e65100; }
+        .ai-badge-legend {
+            display: inline-block; font-size: 8px; font-weight: 700;
+            background: linear-gradient(135deg, #00897b, #00695c);
+            color: #fff; padding: 1px 4px; border-radius: 3px; margin-right: 6px;
+        }
+
+        /* ---- Route Planning Panel ---- */
+        .route-panel {
+            position: absolute;
+            top: 80px;
+            left: 10px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(8px);
+            min-width: 220px;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .route-panel-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 14px; cursor: grab; user-select: none;
+            background: rgba(0, 102, 255, 0.08);
+            border-bottom: 1px solid rgba(0, 102, 255, 0.15);
+        }
+        .route-panel-header:active { cursor: grabbing; }
+        .route-panel-header:hover { background: rgba(0, 102, 255, 0.14); }
+        .route-panel-drag-hint {
+            font-size: 11px; color: #99b; letter-spacing: 2px; margin-right: 4px;
+        }
+        .route-panel-header h3 {
+            font-size: 13px; font-weight: 600; color: #0050cc; margin: 0;
+        }
+        .route-panel-toggle {
+            font-size: 14px; color: #0050cc; transition: transform 0.3s;
+        }
+        .route-panel.collapsed .route-panel-toggle { transform: rotate(-90deg); }
+        .route-panel-body { padding: 12px 14px; }
+        .route-panel.collapsed .route-panel-body { display: none; }
+        .route-field {
+            display: flex; align-items: center; gap: 6px;
+            margin-bottom: 6px;
+        }
+        .route-field label {
+            font-size: 11px; color: #555; min-width: 58px;
+        }
+        .route-field input[type="number"], .route-field select {
+            flex: 1; padding: 4px 6px; border: 1px solid #ccc;
+            border-radius: 4px; font-size: 12px; max-width: 80px;
+        }
+        .route-field input:focus, .route-field select:focus {
+            outline: none; border-color: #0066ff;
+            box-shadow: 0 0 0 2px rgba(0,102,255,0.15);
+        }
+        .route-field span { font-size: 10px; color: #888; }
+        .route-buttons { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+        .route-btn {
+            flex: 1; min-width: 90px; padding: 6px 8px;
+            border: none; border-radius: 5px;
+            font-size: 11px; font-weight: 600; cursor: pointer;
+            transition: background 0.2s, opacity 0.2s;
+        }
+        .route-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .route-btn-draw { background: #0066ff; color: #fff; }
+        .route-btn-draw:hover:not(:disabled) { background: #0052cc; }
+        .route-btn-draw.drawing { background: #ff6600; }
+        .route-btn-draw.drawing:hover { background: #e55c00; }
+        .route-btn-clear { background: #e0e0e0; color: #555; }
+        .route-btn-clear:hover:not(:disabled) { background: #ccc; }
+        .route-btn-auto { background: #00897b; color: #fff; min-width: 100%; }
+        .route-btn-auto:hover:not(:disabled) { background: #00796b; }
+        .route-btn-export { background: #5c6bc0; color: #fff; min-width: 100%; }
+        .route-btn-export:hover:not(:disabled) { background: #3f51b5; }
+        .route-summary {
+            margin-top: 8px; padding-top: 8px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 11px; color: #555; line-height: 1.6;
+        }
+        .route-summary strong { color: #333; }
+        .route-status {
+            font-size: 10px; margin-top: 6px; line-height: 1.4;
+        }
+        .route-status.info { color: #0066ff; }
+        .route-status.error { color: #e53935; }
+        .route-status.ok { color: #43a047; }
+        .route-waypoint-marker { background: none !important; border: none !important; }
+        .route-label { background: none !important; border: none !important; overflow: visible !important; }
+        .route-warning-popup .leaflet-popup-content-wrapper {
+            background: #fff3e0; border: 2px solid #e65100; border-radius: 8px;
+        }
+        .route-warning-popup .leaflet-popup-content {
+            color: #bf360c; font-size: 13px; margin: 10px 14px;
+        }
+        .route-warning-popup .leaflet-popup-tip { background: #fff3e0; }
+
+        @media (max-width: 600px) {
+            .route-panel { top: 60px; left: 5px; min-width: 180px; }
+        }
+
+        /* Boat marker */
+        .boat-icon { background: none !important; border: none !important; cursor: grab; }
+        .boat-icon:active { cursor: grabbing; }
+        .boat-icon svg { filter: drop-shadow(1px 2px 3px rgba(0,0,0,0.4)); }
+        .boat-popup .leaflet-popup-content-wrapper {
+            background: rgba(30,30,50,0.92); color: #fff; border-radius: 8px;
+            font-family: 'Segoe UI', system-ui, sans-serif; min-width: 160px;
+        }
+        .boat-popup .leaflet-popup-tip { border-top-color: rgba(30,30,50,0.92); }
+        .boat-popup .leaflet-popup-content { margin: 8px 12px; }
+        .boat-popup .leaflet-popup-close-button { display: none; }
+        .boat-heading { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+        .boat-wind-angle { font-size: 14px; margin-top: 4px; }
+        .boat-wind-speed { font-size: 11px; color: #aab; margin-top: 2px; }
+        .boat-hint { font-size: 9px; color: #778; margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 4px; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <div class="control-panel">
+        <h2>Israel Coast Wind &amp; Waves</h2>
+        <div class="control-group">
+            <label for="interval">Refresh every</label>
+            <input type="number" id="interval" value="5" min="1" max="60" step="1">
+            <span>min</span>
+        </div>
+        <button class="btn-refresh" id="refreshBtn" onclick="refreshData()">Refresh Now</button>
+        <button class="btn-refresh" id="pauseBtn" onclick="togglePause()" style="background:#78909c;margin-left:4px">Pause</button>
+        <div class="status" id="status">Initializing...</div>
+        <div class="countdown" id="countdown"></div>
+        <div class="api-key-section" id="apiKeySection">
+            <label for="geminiKey">Gemini API Key (AI wave estimate)</label>
+            <input type="password" id="geminiKey" placeholder="Paste your Gemini API key">
+            <div class="key-status" id="keyStatus"></div>
+        </div>
+    </div>
+
+    <!-- Route Planning Panel -->
+    <div class="route-panel collapsed" id="routePanel">
+        <div class="route-panel-header" id="routePanelHeader">
+            <span class="route-panel-drag-hint">&#9776;</span>
+            <h3 style="flex:1">Route Planning</h3>
+            <span class="route-panel-toggle">&#9660;</span>
+        </div>
+        <div class="route-panel-body">
+            <div class="route-field">
+                <label>Vessel</label>
+                <select id="rVesselType"><option value="motor">Motor</option><option value="sail">Sail</option></select>
+            </div>
+            <div class="route-field">
+                <label>LOA</label>
+                <input type="number" id="rLOA" value="10" min="1" max="200" step="0.1"><span>m</span>
+            </div>
+            <div class="route-field">
+                <label>Beam</label>
+                <input type="number" id="rBeam" value="3" min="0.5" max="30" step="0.1"><span>m</span>
+            </div>
+            <div class="route-field">
+                <label>Draft</label>
+                <input type="number" id="rDraft" value="1.5" min="0.1" max="20" step="0.1"><span>m</span>
+            </div>
+            <div class="route-field">
+                <label>Safety</label>
+                <input type="number" id="rSafety" value="2" min="0" max="20" step="0.5"><span>m</span>
+            </div>
+            <div class="route-field">
+                <label>Speed</label>
+                <input type="number" id="rSpeed" value="6" min="0.5" max="50" step="0.5"><span>kts</span>
+            </div>
+            <div class="route-field" style="margin-top:4px">
+                <label for="rDepthCheck" style="min-width:0;flex:1;display:flex;align-items:center;gap:6px;cursor:pointer">
+                    <input type="checkbox" id="rDepthCheck" checked style="margin:0;cursor:pointer"> Check depth clearance
+                </label>
+            </div>
+            <div class="route-buttons">
+                <button class="route-btn route-btn-draw" id="rDrawBtn" onclick="toggleRouteDraw()">Draw Route</button>
+                <button class="route-btn route-btn-clear" id="rClearBtn" onclick="clearRoute()" disabled>Clear</button>
+                <button class="route-btn route-btn-auto" id="rAutoBtn" onclick="autoCorrectRoute()" disabled>Auto-Correct Route</button>
+                <button class="route-btn route-btn-export" id="rExportBtn" onclick="exportRouteGPX()" disabled>Export GPX</button>
+            </div>
+            <div class="route-summary" id="routeSummary" style="display:none">
+                <div><strong>Distance:</strong> <span id="rTotalDist">0.0</span> nm</div>
+                <div><strong>ETA:</strong> <span id="rETA">--</span></div>
+                <div><strong>Waypoints:</strong> <span id="rWpCount">0</span></div>
+            </div>
+            <div class="route-status" id="routeStatus"></div>
+        </div>
+    </div>
+
+    <div class="legend">
+        <h3>Wind Speed (knots)</h3>
+        <div class="legend-item"><div class="legend-color" style="background:#3288bd"></div> 0 &ndash; 5 Calm</div>
+        <div class="legend-item"><div class="legend-color" style="background:#66c2a5"></div> 5 &ndash; 10 Light</div>
+        <div class="legend-item"><div class="legend-color" style="background:#abdda4"></div> 10 &ndash; 15 Moderate</div>
+        <div class="legend-item"><div class="legend-color" style="background:#fee08b"></div> 15 &ndash; 20 Fresh</div>
+        <div class="legend-item"><div class="legend-color" style="background:#fdae61"></div> 20 &ndash; 25 Strong</div>
+        <div class="legend-item"><div class="legend-color" style="background:#f46d43"></div> 25 &ndash; 30 Near Gale</div>
+        <div class="legend-item"><div class="legend-color" style="background:#d53e4f"></div> 30+ Gale</div>
+
+        <div class="legend-section">
+            <h3>Wave Height (m)</h3>
+            <div class="legend-item"><div class="legend-color" style="background:#82b1ff"></div> 0 &ndash; 0.3 Flat</div>
+            <div class="legend-item"><div class="legend-color" style="background:#00c853"></div> 0.3 &ndash; 0.6 Small</div>
+            <div class="legend-item"><div class="legend-color" style="background:#ffd740"></div> 0.6 &ndash; 1.0 Moderate</div>
+            <div class="legend-item"><div class="legend-color" style="background:#ff9100"></div> 1.0 &ndash; 1.5 Significant</div>
+            <div class="legend-item"><div class="legend-color" style="background:#ff5252"></div> 1.5 &ndash; 2.5 Large</div>
+            <div class="legend-item"><div class="legend-color" style="background:#aa00ff"></div> 2.5+ Very large</div>
+        </div>
+
+        <div class="legend-section">
+            <h3>Pressure Isobars</h3>
+            <div class="legend-item"><span class="isobar-sample-thick"></span> Every 4 hPa</div>
+            <div class="legend-item"><span class="isobar-sample-thin"></span> Every 1 hPa</div>
+        </div>
+
+        <div class="legend-section">
+            <h3>Webcams</h3>
+            <div class="legend-item"><span class="cam-badge-legend">CAM</span> Live beach camera</div>
+        </div>
+
+        <div class="legend-section">
+            <h3>Sea Bed Depth</h3>
+            <div class="legend-item" style="font-size:10px;color:#777">Switch base layer (top-right) to view bathymetry from EMODnet or GEBCO</div>
+        </div>
+
+        <div class="legend-section">
+            <h3>AI Wave Estimate</h3>
+            <div class="legend-item"><span class="ai-badge-legend">AI</span> Gemini vision estimate</div>
+        </div>
+    </div>
+
+    <!-- Webcam modal -->
+    <div class="webcam-overlay" id="webcamOverlay" onclick="if(event.target===this)closeWebcam()">
+        <div class="webcam-box">
+            <div class="webcam-header">
+                <h3 id="webcamTitle">Webcam</h3>
+                <button class="webcam-close" onclick="closeWebcam()">&times;</button>
+            </div>
+            <div class="webcam-body" id="webcamBody"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+    (function () {
+        'use strict';
+
+        // ============================================================
+        // CONFIGURATION
+        // ============================================================
+
+        var STATIONS = [
+            { name: 'Rosh HaNikra',  lat: 33.085, lon: 35.100 },
+            { name: 'Nahariya',       lat: 33.005, lon: 35.090 },
+            { name: 'Akko',           lat: 32.920, lon: 35.070 },
+            { name: 'Haifa',          lat: 32.825, lon: 34.980 },
+            { name: 'Atlit',          lat: 32.690, lon: 34.940 },
+            { name: 'Dor',            lat: 32.610, lon: 34.920 },
+            { name: 'Caesarea',       lat: 32.500, lon: 34.890 },
+            { name: 'Hadera',         lat: 32.440, lon: 34.875 },
+            { name: 'Netanya',        lat: 32.330, lon: 34.850 },
+            { name: 'Herzliya',       lat: 32.165, lon: 34.790 },
+            { name: 'Tel Aviv',       lat: 32.085, lon: 34.770 },
+            { name: 'Jaffa',          lat: 32.050, lon: 34.755 },
+            { name: 'Bat Yam',        lat: 32.020, lon: 34.740 },
+            { name: 'Rishon LeZion',  lat: 31.970, lon: 34.730 },
+            { name: 'Palmachim',      lat: 31.930, lon: 34.700 },
+            { name: 'Ashdod',         lat: 31.800, lon: 34.640 },
+            { name: 'Ashkelon',       lat: 31.670, lon: 34.560 }
+        ];
+
+        // Beach webcams mapped to station names
+        // Sources: beachcam.co.il, skylinewebcams.com
+        var WEBCAMS = {
+            'Haifa': [
+                { name: 'Bat Galim',  url: 'https://beachcam.co.il/en/batgalim.html' },
+                { name: 'Surf Club',  url: 'https://beachcam.co.il/en/testcam1.html' },
+                { name: 'Meridian',   url: 'https://beachcam.co.il/en/meridian.html' },
+                { name: 'Krayot',     url: 'https://beachcam.co.il/en/krayot.html' }
+            ],
+            'Caesarea': [
+                { name: 'Caesarea',   url: 'https://wind.co.il/' }
+            ],
+            'Netanya': [
+                { name: 'Kontiki',    url: 'https://beachcam.co.il/en/kontiki.html' }
+            ],
+            'Herzliya': [
+                { name: 'South Beach',url: 'https://beachcam.co.il/en/dromi2.html' },
+                { name: 'Marina South', url: 'https://beachcam.co.il/en/dromiads.html' },
+                { name: 'Marina Entrance', url: 'https://beachcam.co.il/en/marina.out.html' },
+                { name: 'Arena Point',url: 'https://beachcam.co.il/en/marina.html' },
+                { name: 'Zvulun',     url: 'https://beachcam.co.il/en/zvulun.html' }
+            ],
+            'Tel Aviv': [
+                { name: 'Hilton Beach', url: 'https://beachcam.co.il/en/yamit.html' },
+                { name: 'Aviv Beach', url: 'https://beachcam.co.il/en/dolfinarium.html' }
+            ],
+            'Jaffa': [
+                { name: 'Jaffa Beach',url: 'https://beachcam.co.il/en/yafo.html' }
+            ],
+            'Ashdod': [
+                { name: 'Oranim Beach', url: 'https://www.skylinewebcams.com/en/webcam/israel/southern-district/ashdod/oranim-beach.html' }
+            ]
+        };
+
+        // Pressure grid for isobars
+        var GRID = {
+            latMin: 30.5, latMax: 34.0,
+            lonMin: 33.0, lonMax: 37.0,
+            rows: 12, cols: 12
+        };
+
+        var WIND_COLORS = [
+            { max: 5,        color: '#3288bd' },
+            { max: 10,       color: '#66c2a5' },
+            { max: 15,       color: '#abdda4' },
+            { max: 20,       color: '#fee08b' },
+            { max: 25,       color: '#fdae61' },
+            { max: 30,       color: '#f46d43' },
+            { max: Infinity, color: '#d53e4f' }
+        ];
+
+        var WAVE_COLORS = [
+            { max: 0.3,      color: '#82b1ff' },
+            { max: 0.6,      color: '#00c853' },
+            { max: 1.0,      color: '#ffd740' },
+            { max: 1.5,      color: '#ff9100' },
+            { max: 2.5,      color: '#ff5252' },
+            { max: Infinity, color: '#aa00ff' }
+        ];
+
+        // Longitude offset to get offshore marine data (~20 km into the sea)
+        var MARINE_LON_OFFSET = -0.25;
+
+        // ============================================================
+        // MAP SETUP
+        // ============================================================
+
+        var map = L.map('map', {
+            center: [32.3, 34.55],
+            zoom: 9,
+            zoomControl: true
+        });
+
+        var cartoLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a> | Data: <a href="https://open-meteo.com/">Open-Meteo</a> | Cams: <a href="https://beachcam.co.il">BeachCam.co.il</a> | AI: <a href="https://ai.google.dev/">Gemini</a>',
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Bathymetry base layers (sea bed depth)
+        var emodnetBathy = L.tileLayer('https://tiles.emodnet-bathymetry.eu/latest/mean_atlas_land/web_mercator/{z}/{x}/{y}.png', {
+            attribution: 'Bathymetry: <a href="https://emodnet.ec.europa.eu/en/bathymetry">EMODnet</a> | Data: <a href="https://open-meteo.com/">Open-Meteo</a>',
+            maxZoom: 15
+        });
+
+        var gebcoBathy = L.tileLayer.wms('https://wms.gebco.net/mapserv?', {
+            layers: 'gebco_latest',
+            format: 'image/jpeg',
+            attribution: 'Bathymetry: <a href="https://www.gebco.net">GEBCO</a> | Data: <a href="https://open-meteo.com/">Open-Meteo</a>'
+        });
+
+        var windLayer = L.layerGroup().addTo(map);
+        var waveLayer = L.layerGroup();
+        var isobarLayer = L.layerGroup();
+        var isobarLabelLayer = L.layerGroup();
+        var aiWaveLayer = L.layerGroup();
+        var routeLayer = L.layerGroup();
+        var boatLayer = L.layerGroup();
+        var legendToggle = L.layerGroup().addTo(map); // dummy layer to toggle legend panel
+
+        L.control.layers({
+            'Standard Map': cartoLayer,
+            'Sea Depth (EMODnet)': emodnetBathy,
+            'Sea Depth (GEBCO)': gebcoBathy
+        }, {
+            'Wind Arrows': windLayer,
+            'Wave Heights': waveLayer,
+            'Isobars': isobarLayer,
+            'Isobar Labels': isobarLabelLayer,
+            'AI Wave Estimate': aiWaveLayer,
+            'Route': routeLayer,
+            'Boat': boatLayer,
+            'Legend': legendToggle
+        }, { position: 'bottomright', collapsed: true }).addTo(map);
+
+        // Toggle legend panel visibility via layer control
+        map.on('overlayadd', function (e) {
+            if (e.layer === legendToggle) {
+                document.querySelector('.legend').style.display = '';
+            }
+        });
+        map.on('overlayremove', function (e) {
+            if (e.layer === legendToggle) {
+                document.querySelector('.legend').style.display = 'none';
+            }
+        });
+
+        // ============================================================
+        // STATE
+        // ============================================================
+
+        var refreshTimer = null;
+        var isLoading = false;
+        var nextRefreshTime = null;
+        var countdownInterval = null;
+        var latestMarineData = null;
+        var latestStationData = null;
+
+        // Boat state
+        var boatHeading = 0;      // degrees, 0 = north
+        var boatMarker = null;
+        var boatPopup = null;
+
+        // AI wave estimation state
+        var AI_WEBCAMS = [
+            { station: 'Herzliya',  stationIndex: 9,  url: 'https://imgproxy.windy.com/_/full/plain/current/1642679224/original.jpg',
+              location: 'south of Herzliya Marina, Israel (Mediterranean coast)', badgeOffset: [-0.015, -0.07] },
+            { station: 'Jaffa',     stationIndex: 11, url: 'https://imgproxy.windy.com/_/full/plain/current/1639421838/original.jpg',
+              location: 'about 100m north of Jaffa Port, Tel Aviv, Israel (Mediterranean coast)', badgeOffset: [0.008, -0.07] }
+        ];
+        var latestAiEstimates = {};  // keyed by station name
+        var aiRefreshTimer = null;
+        var AI_REFRESH_MINUTES = 15;
+        var CORS_PROXIES = [
+            'https://corsproxy.io/?url=',
+            'https://api.allorigins.win/raw?url='
+        ];
+
+        // ============================================================
+        // UTILITY
+        // ============================================================
+
+        function getWindColor(speed) {
+            for (var i = 0; i < WIND_COLORS.length; i++) {
+                if (speed < WIND_COLORS[i].max) return WIND_COLORS[i].color;
+            }
+            return '#d53e4f';
+        }
+
+        function getWaveColor(height) {
+            for (var i = 0; i < WAVE_COLORS.length; i++) {
+                if (height < WAVE_COLORS[i].max) return WAVE_COLORS[i].color;
+            }
+            return '#aa00ff';
+        }
+
+        function dirToCompass(deg) {
+            var dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE',
+                        'S','SSW','SW','WSW','W','WNW','NW','NNW'];
+            return dirs[Math.round(deg / 22.5) % 16];
+        }
+
+        function createWindArrowIcon(speed, direction, color) {
+            var flowDeg = (direction + 180) % 360;
+            var size = Math.min(44, Math.max(24, 20 + speed * 0.7));
+            var half = size / 2;
+
+            var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" ' +
+                'viewBox="0 0 40 40" style="transform:rotate(' + flowDeg + 'deg)">' +
+                '<circle cx="20" cy="20" r="4" fill="' + color + '" opacity="0.25"/>' +
+                '<line x1="20" y1="28" x2="20" y2="10" stroke="' + color + '" stroke-width="2.8" stroke-linecap="round"/>' +
+                '<polygon points="20,5 14,14 26,14" fill="' + color + '"/>' +
+                '</svg>';
+
+            return L.divIcon({
+                html: svg,
+                className: 'wind-arrow',
+                iconSize: [size, size],
+                iconAnchor: [half, half]
+            });
+        }
+
+        // ============================================================
+        // APIs — Open-Meteo (free, no key)
+        // ============================================================
+
+        function fetchStationData() {
+            var lats = STATIONS.map(function (s) { return s.lat; }).join(',');
+            var lons = STATIONS.map(function (s) { return s.lon; }).join(',');
+
+            var url = 'https://api.open-meteo.com/v1/forecast' +
+                '?latitude=' + lats +
+                '&longitude=' + lons +
+                '&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m,surface_pressure' +
+                '&wind_speed_unit=kn&timezone=auto';
+
+            return fetch(url)
+                .then(function (r) { if (!r.ok) throw new Error('Station API ' + r.status); return r.json(); })
+                .then(function (d) { return Array.isArray(d) ? d : [d]; });
+        }
+
+        function fetchMarineData() {
+            var lats = STATIONS.map(function (s) { return s.lat.toFixed(4); }).join(',');
+            var lons = STATIONS.map(function (s) { return (s.lon + MARINE_LON_OFFSET).toFixed(4); }).join(',');
+
+            var url = 'https://marine-api.open-meteo.com/v1/marine' +
+                '?latitude=' + lats +
+                '&longitude=' + lons +
+                '&current=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period' +
+                '&timezone=auto';
+
+            return fetch(url)
+                .then(function (r) { if (!r.ok) throw new Error('Marine API ' + r.status); return r.json(); })
+                .then(function (d) { return Array.isArray(d) ? d : [d]; });
+        }
+
+        function fetchPressureGrid() {
+            var lats = [], lons = [];
+            for (var i = 0; i < GRID.rows; i++) {
+                for (var j = 0; j < GRID.cols; j++) {
+                    lats.push((GRID.latMin + i * (GRID.latMax - GRID.latMin) / (GRID.rows - 1)).toFixed(4));
+                    lons.push((GRID.lonMin + j * (GRID.lonMax - GRID.lonMin) / (GRID.cols - 1)).toFixed(4));
+                }
+            }
+            var url = 'https://api.open-meteo.com/v1/forecast' +
+                '?latitude=' + lats.join(',') +
+                '&longitude=' + lons.join(',') +
+                '&current=surface_pressure&timezone=auto';
+
+            return fetch(url)
+                .then(function (r) { if (!r.ok) throw new Error('Grid API ' + r.status); return r.json(); })
+                .then(function (data) {
+                    if (!Array.isArray(data)) data = [data];
+                    var grid = [];
+                    for (var i = 0; i < GRID.rows; i++) {
+                        var row = [];
+                        for (var j = 0; j < GRID.cols; j++) {
+                            row.push(data[i * GRID.cols + j].current.surface_pressure);
+                        }
+                        grid.push(row);
+                    }
+                    return grid;
+                });
+        }
+
+        // ============================================================
+        // WIND + WAVE DISPLAY
+        // ============================================================
+
+        function displayStationData(stationData, marineData) {
+            windLayer.clearLayers();
+            waveLayer.clearLayers();
+            latestStationData = stationData;
+            latestMarineData = marineData;
+
+            stationData.forEach(function (data, idx) {
+                var station = STATIONS[idx];
+                var cur = data.current;
+                var speed = cur.wind_speed_10m;
+                var dir = cur.wind_direction_10m;
+                var gusts = cur.wind_gusts_10m;
+                var pressure = cur.surface_pressure;
+                var windColor = getWindColor(speed);
+
+                // Marine data for this station
+                var marine = marineData[idx] ? marineData[idx].current : null;
+                var waveH = marine ? marine.wave_height : null;
+                var waveDir = marine ? marine.wave_direction : null;
+                var wavePer = marine ? marine.wave_period : null;
+                var swellH = marine ? marine.swell_wave_height : null;
+                var swellDir = marine ? marine.swell_wave_direction : null;
+                var swellPer = marine ? marine.swell_wave_period : null;
+                var waveColor = waveH !== null ? getWaveColor(waveH) : '#999';
+
+                // Webcams for this station
+                var cams = WEBCAMS[station.name] || [];
+
+                // ---- Build popup content ----
+                var html = '<div class="wind-popup">';
+                html += '<div class="popup-name">' + station.name + '</div>';
+
+                // Wind section
+                html += '<div class="popup-section">';
+                html += '<div class="popup-detail"><strong>Wind:</strong> ' + speed.toFixed(1) + ' kts ' + dirToCompass(dir) + ' (' + Math.round(dir) + '&deg;)</div>';
+                html += '<div class="popup-detail"><strong>Gusts:</strong> ' + gusts.toFixed(1) + ' kts</div>';
+                html += '<div class="popup-detail"><strong>Pressure:</strong> ' + pressure.toFixed(1) + ' hPa</div>';
+                html += '</div>';
+
+                // Wave section
+                if (waveH !== null) {
+                    html += '<div class="popup-section">';
+                    html += '<div class="popup-wave-height" style="color:' + waveColor + '">' + waveH.toFixed(2) + ' m</div>';
+                    html += '<div class="popup-detail"><strong>Waves:</strong> ' + waveH.toFixed(2) + ' m from ' + dirToCompass(waveDir) + ' / ' + wavePer.toFixed(1) + 's period</div>';
+                    if (swellH !== null && swellH > 0) {
+                        html += '<div class="popup-detail"><strong>Swell:</strong> ' + swellH.toFixed(2) + ' m from ' + dirToCompass(swellDir) + ' / ' + swellPer.toFixed(1) + 's</div>';
+                    }
+                    html += '</div>';
+                }
+
+                // AI Wave Estimate section
+                if (latestAiEstimates[station.name]) {
+                    var est = latestAiEstimates[station.name];
+                    html += '<div class="popup-section popup-ai-estimate">';
+                    html += '<div class="ai-label">AI Wave Estimate (Gemini Vision)</div>';
+                    if (est.height !== null && !est.error) {
+                        var aiColor = getWaveColor(est.height);
+                        html += '<div class="ai-height" style="color:' + aiColor + '">' + est.height.toFixed(2) + ' m</div>';
+                        html += '<div class="ai-confidence">Confidence: ' + est.confidence + '</div>';
+                        if (est.description) html += '<div class="popup-detail">' + est.description + '</div>';
+                    } else if (est.error) {
+                        html += '<div class="ai-error">Error: ' + est.error + '</div>';
+                    } else {
+                        html += '<div class="ai-error">Unable to estimate from current image</div>';
+                    }
+                    if (est.timestamp) {
+                        html += '<div class="popup-detail" style="font-size:10px;color:#999">AI updated: ' + est.timestamp.toLocaleTimeString() + '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                // Webcam section
+                if (cams.length > 0) {
+                    html += '<div class="popup-section popup-cam-links">';
+                    html += '<div class="popup-detail"><strong>Webcams:</strong></div>';
+                    cams.forEach(function (cam) {
+                        html += '<a class="popup-cam-link" href="#" onclick="openWebcam(\'' +
+                            cam.url.replace(/'/g, "\\'") + "', '" +
+                            (station.name + ' - ' + cam.name).replace(/'/g, "\\'") +
+                            "'); return false;\">" + cam.name + '</a>';
+                    });
+                    html += '</div>';
+                }
+
+                html += '</div>';
+
+                // ---- Wind arrow marker ----
+                var icon = createWindArrowIcon(speed, dir, windColor);
+                var marker = L.marker([station.lat, station.lon], { icon: icon }).bindPopup(html, { maxWidth: 280 });
+                windLayer.addLayer(marker);
+
+                // Wind speed label (below-left of arrow)
+                windLayer.addLayer(L.marker([station.lat, station.lon], {
+                    icon: L.divIcon({
+                        html: '<div style="font-size:11px;font-weight:700;color:' + windColor +
+                            ';text-align:center;text-shadow:1px 1px 2px #fff,-1px -1px 2px #fff,1px -1px 2px #fff,-1px 1px 2px #fff;pointer-events:none;transform:translate(-18px,16px);width:28px">' +
+                            speed.toFixed(0) + '</div>',
+                        className: 'station-label', iconSize: [0, 0], iconAnchor: [0, 0]
+                    }),
+                    interactive: false
+                }));
+
+                // Station name label (above arrow)
+                var nameHtml = '<div style="font-size:9px;color:#444;white-space:nowrap;text-shadow:1px 1px 2px #fff,-1px -1px 2px #fff,1px -1px 2px #fff,-1px 1px 2px #fff;pointer-events:none;transform:translate(-30px,-22px);width:60px;text-align:center">' +
+                    station.name + '</div>';
+                windLayer.addLayer(L.marker([station.lat, station.lon], {
+                    icon: L.divIcon({ html: nameHtml, className: 'station-label', iconSize: [0, 0], iconAnchor: [0, 0] }),
+                    interactive: false
+                }));
+
+                // CAM badge (if webcams exist, below-right)
+                if (cams.length > 0) {
+                    windLayer.addLayer(L.marker([station.lat, station.lon], {
+                        icon: L.divIcon({
+                            html: '<div style="font-size:10px;font-weight:700;color:#fff;background:#0288d1;padding:2px 5px;border-radius:3px;pointer-events:none;white-space:nowrap">CAM</div>',
+                            className: 'station-label', iconSize: [36, 18], iconAnchor: [-8, -16]
+                        }),
+                        interactive: false
+                    }));
+                }
+
+                // ---- Wave height badge (on the sea-side of the station) ----
+                if (waveH !== null) {
+                    // Place the wave badge slightly west (seaward) of the station
+                    var waveLat = station.lat;
+                    var waveLon = station.lon - 0.04;
+
+                    var waveSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="42" height="28" viewBox="0 0 42 28">' +
+                        '<rect x="0" y="0" width="42" height="28" rx="6" fill="' + waveColor + '" opacity="0.9"/>' +
+                        '<path d="M4,20 Q10,14 16,20 Q22,26 28,20 Q34,14 40,20" stroke="rgba(255,255,255,0.6)" fill="none" stroke-width="1.5"/>' +
+                        '<text x="21" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#fff" font-family="Segoe UI,system-ui,sans-serif">' + waveH.toFixed(1) + '</text>' +
+                        '</svg>';
+
+                    waveLayer.addLayer(L.marker([waveLat, waveLon], {
+                        icon: L.divIcon({
+                            html: waveSvg,
+                            className: 'wave-badge',
+                            iconSize: [42, 28],
+                            iconAnchor: [21, 14]
+                        })
+                    }).bindPopup(html, { maxWidth: 280 }));
+                }
+            });
+        }
+
+        // ============================================================
+        // ISOBAR CONTOURING — Marching Squares
+        // ============================================================
+
+        function marchingSquares(grid, threshold) {
+            var segments = [];
+            var rows = grid.length, cols = grid[0].length;
+            for (var i = 0; i < rows - 1; i++) {
+                for (var j = 0; j < cols - 1; j++) {
+                    var tl = grid[i][j], tr = grid[i][j+1], br = grid[i+1][j+1], bl = grid[i+1][j];
+                    var ci = 0;
+                    if (tl >= threshold) ci |= 8;
+                    if (tr >= threshold) ci |= 4;
+                    if (br >= threshold) ci |= 2;
+                    if (bl >= threshold) ci |= 1;
+                    if (ci === 0 || ci === 15) continue;
+
+                    var lerp = function (v1, v2) {
+                        var d = v2 - v1;
+                        return Math.abs(d) < 1e-6 ? 0.5 : (threshold - v1) / d;
+                    };
+                    var top = [i, j + lerp(tl, tr)];
+                    var right = [i + lerp(tr, br), j + 1];
+                    var bottom = [i + 1, j + lerp(bl, br)];
+                    var left = [i + lerp(tl, bl), j];
+
+                    switch (ci) {
+                        case  1: segments.push([bottom, left]); break;
+                        case  2: segments.push([right, bottom]); break;
+                        case  3: segments.push([right, left]); break;
+                        case  4: segments.push([top, right]); break;
+                        case  5: segments.push([top, right]); segments.push([bottom, left]); break;
+                        case  6: segments.push([top, bottom]); break;
+                        case  7: segments.push([top, left]); break;
+                        case  8: segments.push([left, top]); break;
+                        case  9: segments.push([bottom, top]); break;
+                        case 10: segments.push([left, top]); segments.push([right, bottom]); break;
+                        case 11: segments.push([right, top]); break;
+                        case 12: segments.push([left, right]); break;
+                        case 13: segments.push([bottom, right]); break;
+                        case 14: segments.push([left, bottom]); break;
+                    }
+                }
+            }
+            return segments;
+        }
+
+        function gridToLatLon(rc) {
+            return [
+                GRID.latMin + rc[0] * (GRID.latMax - GRID.latMin) / (GRID.rows - 1),
+                GRID.lonMin + rc[1] * (GRID.lonMax - GRID.lonMin) / (GRID.cols - 1)
+            ];
+        }
+
+        function connectSegments(segments) {
+            if (!segments.length) return [];
+            var EPS = 0.001, used = {}, paths = [];
+            function close(a, b) { return Math.abs(a[0]-b[0]) < EPS && Math.abs(a[1]-b[1]) < EPS; }
+            for (var i = 0; i < segments.length; i++) {
+                if (used[i]) continue;
+                var path = [segments[i][0], segments[i][1]];
+                used[i] = true;
+                var changed = true;
+                while (changed) {
+                    changed = false;
+                    for (var j = 0; j < segments.length; j++) {
+                        if (used[j]) continue;
+                        var s = segments[j];
+                        if (close(path[path.length-1], s[0]))      { path.push(s[1]);    used[j]=true; changed=true; }
+                        else if (close(path[path.length-1], s[1])) { path.push(s[0]);    used[j]=true; changed=true; }
+                        else if (close(path[0], s[1]))             { path.unshift(s[0]); used[j]=true; changed=true; }
+                        else if (close(path[0], s[0]))             { path.unshift(s[1]); used[j]=true; changed=true; }
+                    }
+                }
+                paths.push(path);
+            }
+            return paths;
+        }
+
+        function smoothPath(pts, iters) {
+            if (pts.length < 3) return pts;
+            var r = pts;
+            for (var it = 0; it < iters; it++) {
+                var s = [r[0]];
+                for (var i = 0; i < r.length - 1; i++) {
+                    s.push([0.75*r[i][0]+0.25*r[i+1][0], 0.75*r[i][1]+0.25*r[i+1][1]]);
+                    s.push([0.25*r[i][0]+0.75*r[i+1][0], 0.25*r[i][1]+0.75*r[i+1][1]]);
+                }
+                s.push(r[r.length-1]);
+                r = s;
+            }
+            return r;
+        }
+
+        function displayIsobars(pressureGrid) {
+            isobarLayer.clearLayers();
+            isobarLabelLayer.clearLayers();
+            var minP = Infinity, maxP = -Infinity;
+            pressureGrid.forEach(function (row) {
+                row.forEach(function (v) { if (v < minP) minP = v; if (v > maxP) maxP = v; });
+            });
+            for (var level = Math.ceil(minP); level <= Math.floor(maxP); level++) {
+                var segs = marchingSquares(pressureGrid, level);
+                if (!segs.length) continue;
+                var paths = connectSegments(segs);
+                var isMajor = (level % 4 === 0);
+                paths.forEach(function (p) {
+                    var ll = smoothPath(p.map(gridToLatLon), 2);
+                    var line = L.polyline(ll, {
+                        color: '#6a5acd', weight: isMajor ? 2.2 : 1,
+                        opacity: isMajor ? 0.8 : 0.4, dashArray: isMajor ? null : '4,4'
+                    });
+                    line.bindTooltip(level + ' hPa', { sticky: true, opacity: 0.9 });
+                    isobarLayer.addLayer(line);
+                    if (isMajor && ll.length > 6) {
+                        var mid = ll[Math.floor(ll.length / 2)];
+                        isobarLabelLayer.addLayer(L.marker(mid, {
+                            icon: L.divIcon({
+                                html: '<div style="font-size:10px;font-weight:600;color:#5040b0;background:rgba(255,255,255,0.85);padding:1px 4px;border-radius:3px;white-space:nowrap;pointer-events:none;border:1px solid rgba(106,90,205,0.3)">' + level + '</div>',
+                                className: 'isobar-label', iconSize: [0,0], iconAnchor: [-4,6]
+                            }),
+                            interactive: false
+                        }));
+                    }
+                });
+            }
+        }
+
+        // ============================================================
+        // WEBCAM MODAL
+        // ============================================================
+
+        function openWebcam(url, title) {
+            var overlay = document.getElementById('webcamOverlay');
+            document.getElementById('webcamTitle').textContent = title || 'Webcam';
+            var body = document.getElementById('webcamBody');
+
+            // Try loading in iframe; provide fallback link
+            body.innerHTML =
+                '<iframe src="' + url + '" allow="autoplay; fullscreen" sandbox="allow-scripts allow-same-origin allow-popups" ' +
+                'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'" ' +
+                'style="width:100%;height:100%;min-height:400px;border:none"></iframe>' +
+                '<div class="cam-fallback" style="display:none">' +
+                '<p>This webcam cannot be embedded directly.</p>' +
+                '<a href="' + url + '" target="_blank" rel="noopener">Open webcam in new tab</a></div>';
+
+            overlay.classList.add('active');
+
+            // If iframe is blocked by X-Frame-Options (can't detect via JS easily),
+            // add a fallback link below the iframe as a safety net
+            var iframe = body.querySelector('iframe');
+            iframe.addEventListener('load', function () {
+                // If the iframe loaded, it worked — hide fallback
+                // (can't inspect cross-origin content, so this is best-effort)
+            });
+
+            // Always show a "open in new tab" option below
+            if (!body.querySelector('.cam-newtab')) {
+                var link = document.createElement('div');
+                link.className = 'cam-newtab';
+                link.style.cssText = 'text-align:center;padding:6px;background:#f5f5f5;border-top:1px solid #e0e0e0';
+                link.innerHTML = '<a href="' + url + '" target="_blank" rel="noopener" style="font-size:12px;color:#0288d1;text-decoration:none;font-weight:500">Open in new tab</a>';
+                body.parentElement.appendChild(link);
+            }
+        }
+        window.openWebcam = openWebcam;
+
+        function closeWebcam() {
+            var overlay = document.getElementById('webcamOverlay');
+            overlay.classList.remove('active');
+            var body = document.getElementById('webcamBody');
+            body.innerHTML = '';
+            // Remove the newtab link if exists
+            var newtab = overlay.querySelector('.cam-newtab');
+            if (newtab) newtab.remove();
+        }
+        window.closeWebcam = closeWebcam;
+
+        // ============================================================
+        // BOAT — Draggable & Rotatable
+        // ============================================================
+
+        function getNearestStationWind(lat, lon) {
+            if (!latestStationData) return null;
+            var best = null, bestDist = Infinity;
+            STATIONS.forEach(function (s, i) {
+                var d = Math.pow(s.lat - lat, 2) + Math.pow(s.lon - lon, 2);
+                if (d < bestDist) {
+                    bestDist = d;
+                    best = i;
+                }
+            });
+            if (best === null) return null;
+            var cur = latestStationData[best].current;
+            return { speed: cur.wind_speed_10m, dir: cur.wind_direction_10m,
+                     gusts: cur.wind_gusts_10m, station: STATIONS[best].name };
+        }
+
+        function calcWindAngle(windFrom, heading) {
+            // Returns { angle: 0-180, side: 'starboard'|'port'|'head-on'|'following' }
+            var rel = ((windFrom - heading) % 360 + 360) % 360;
+            if (rel < 1 || rel > 359) return { angle: 0, side: 'head-on' };
+            if (rel > 179 && rel < 181) return { angle: 180, side: 'following' };
+            if (rel <= 180) return { angle: Math.round(rel), side: 'starboard' };
+            return { angle: Math.round(360 - rel), side: 'port' };
+        }
+
+        function boatPopupContent() {
+            var pos = boatMarker.getLatLng();
+            var wind = getNearestStationWind(pos.lat, pos.lng);
+            var headingStr = Math.round(boatHeading) + '&deg;';
+
+            var html = '<div style="text-align:center">';
+            html += '<div class="boat-heading">HDG ' + headingStr + '</div>';
+
+            if (wind) {
+                var wa = calcWindAngle(wind.dir, boatHeading);
+                var sideColor = wa.side === 'starboard' ? '#2fa527' : wa.side === 'port' ? '#ef5350' : '#fff';
+                var sideLabel;
+                if (wa.side === 'head-on') sideLabel = 'Head-on';
+                else if (wa.side === 'following') sideLabel = 'Following wind';
+                else sideLabel = wa.angle + '&deg; ' + wa.side;
+
+                html += '<div class="boat-wind-angle" style="color:' + sideColor + '">' + sideLabel + '</div>';
+                html += '<div class="boat-wind-speed">Wind ' + wind.speed.toFixed(1) + ' kts from ' + dirToCompass(wind.dir) + ' (nearest: ' + wind.station + ')</div>';
+            } else {
+                html += '<div class="boat-wind-angle" style="color:#888">No wind data</div>';
+            }
+
+            html += '<div class="boat-hint">Drag to move &middot; Scroll to rotate</div>';
+            html += '</div>';
+            return html;
+        }
+
+        function updateBoatPopup() {
+            if (!boatMarker || !boatPopup) return;
+            boatPopup.setContent(boatPopupContent());
+        }
+
+        function updateBoatIcon() {
+            var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" ' +
+                'style="transform:rotate(' + boatHeading + 'deg)">' +
+                '<path d="M20 4 L28 34 L20 28 L12 34 Z" fill="#1565c0" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>' +
+                '<line x1="20" y1="4" x2="20" y2="16" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>' +
+                '</svg>';
+
+            boatMarker.setIcon(L.divIcon({
+                html: svg,
+                className: 'boat-icon',
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            }));
+        }
+
+        function initBoat() {
+            var startPos = [32.1, 34.72];  // offshore near Herzliya
+
+            boatMarker = L.marker(startPos, {
+                draggable: true,
+                zIndexOffset: 1000,
+                icon: L.divIcon({ html: '', className: 'boat-icon', iconSize: [40, 40], iconAnchor: [20, 20] })
+            });
+            boatLayer.addLayer(boatMarker);
+
+            updateBoatIcon();
+
+            boatPopup = L.popup({
+                closeButton: false,
+                autoClose: false,
+                closeOnClick: false,
+                className: 'boat-popup',
+                offset: [0, -24]
+            })
+            .setLatLng(startPos)
+            .setContent(boatPopupContent());
+            boatLayer.addLayer(boatPopup);
+
+            // Keep popup anchored to boat on drag
+            boatMarker.on('drag', function (e) {
+                boatPopup.setLatLng(e.latlng);
+                updateBoatPopup();
+            });
+            boatMarker.on('dragend', function () {
+                updateBoatPopup();
+            });
+
+            // Scroll wheel on boat to rotate
+            function attachBoatWheel() {
+                var el = boatMarker.getElement();
+                if (!el) return;
+                el.addEventListener('wheel', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var delta = e.deltaY > 0 ? 5 : -5;
+                    boatHeading = ((boatHeading + delta) % 360 + 360) % 360;
+                    updateBoatIcon();
+                    updateBoatPopup();
+                }, { passive: false });
+            }
+            // Attach wheel now and re-attach when layer is toggled back on
+            boatMarker.on('add', attachBoatWheel);
+            attachBoatWheel();
+        }
+
+        // ============================================================
+        // REFRESH LOGIC
+        // ============================================================
+
+        function refreshData() {
+            if (isLoading) return;
+            isLoading = true;
+
+            var statusEl = document.getElementById('status');
+            var refreshBtn = document.getElementById('refreshBtn');
+            refreshBtn.disabled = true;
+            statusEl.className = 'status loading';
+            statusEl.textContent = 'Fetching wind, wave & pressure data...';
+
+            Promise.all([fetchStationData(), fetchMarineData(), fetchPressureGrid()])
+                .then(function (results) {
+                    displayStationData(results[0], results[1]);
+                    displayIsobars(results[2]);
+                    updateBoatPopup();
+
+                    statusEl.className = 'status ok';
+                    statusEl.textContent = 'Updated: ' + new Date().toLocaleTimeString();
+
+                    var intervalMin = parseInt(document.getElementById('interval').value) || 5;
+                    nextRefreshTime = Date.now() + intervalMin * 60 * 1000;
+
+                    // Trigger first AI estimate after initial data load
+                    if (!aiRefreshTimer && getGeminiApiKey()) {
+                        fetchAiWaveEstimate().then(function () { setupAiRefresh(); });
+                    }
+                })
+                .catch(function (err) {
+                    console.error('Refresh error:', err);
+                    statusEl.className = 'status error';
+                    statusEl.textContent = 'Error: ' + err.message;
+                })
+                .finally(function () {
+                    isLoading = false;
+                    refreshBtn.disabled = false;
+                });
+        }
+        window.refreshData = refreshData;
+
+        // ============================================================
+        // AUTO-REFRESH & COUNTDOWN
+        // ============================================================
+
+        function setupAutoRefresh() {
+            if (refreshTimer) clearInterval(refreshTimer);
+            var minutes = parseInt(document.getElementById('interval').value) || 5;
+            refreshTimer = setInterval(refreshData, minutes * 60 * 1000);
+            nextRefreshTime = Date.now() + minutes * 60 * 1000;
+        }
+
+        var isPaused = false;
+
+        function togglePause() {
+            isPaused = !isPaused;
+            var btn = document.getElementById('pauseBtn');
+            var countdownEl = document.getElementById('countdown');
+            if (isPaused) {
+                if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+                if (aiRefreshTimer) { clearInterval(aiRefreshTimer); aiRefreshTimer = null; }
+                btn.textContent = 'Resume';
+                btn.style.background = '#43a047';
+                countdownEl.textContent = 'Auto-refresh paused';
+            } else {
+                setupAutoRefresh();
+                if (getGeminiApiKey()) setupAiRefresh();
+                btn.textContent = 'Pause';
+                btn.style.background = '#78909c';
+            }
+        }
+        window.togglePause = togglePause;
+
+        function updateCountdown() {
+            var el = document.getElementById('countdown');
+            if (isPaused) { el.textContent = 'Auto-refresh paused'; return; }
+            if (!nextRefreshTime || isLoading) { el.textContent = ''; return; }
+            var rem = Math.max(0, nextRefreshTime - Date.now());
+            var m = Math.floor(rem / 60000);
+            var s = Math.floor((rem % 60000) / 1000);
+            el.textContent = 'Next refresh in ' + m + ':' + (s < 10 ? '0' : '') + s;
+        }
+
+        document.getElementById('interval').addEventListener('change', function () {
+            var val = parseInt(this.value);
+            if (isNaN(val) || val < 1) val = 1;
+            if (val > 60) val = 60;
+            this.value = val;
+            if (!isPaused) setupAutoRefresh();
+        });
+
+        countdownInterval = setInterval(updateCountdown, 1000);
+
+        // ============================================================
+        // AI WAVE ESTIMATION — Gemini Vision
+        // ============================================================
+
+        function getGeminiApiKey() {
+            return localStorage.getItem('gemini_api_key') || '';
+        }
+
+        function saveGeminiApiKey(key) {
+            if (key && key.trim()) {
+                localStorage.setItem('gemini_api_key', key.trim());
+            } else {
+                localStorage.removeItem('gemini_api_key');
+            }
+        }
+
+        function initApiKeyUI() {
+            var input = document.getElementById('geminiKey');
+            var statusEl = document.getElementById('keyStatus');
+            var stored = getGeminiApiKey();
+
+            if (stored) {
+                input.value = stored;
+                statusEl.textContent = 'Key saved. AI estimates active.';
+                statusEl.className = 'key-status saved';
+            } else {
+                statusEl.textContent = 'Enter key to enable AI wave estimates.';
+                statusEl.className = 'key-status';
+            }
+
+            input.addEventListener('change', function () {
+                var val = this.value.trim();
+                saveGeminiApiKey(val);
+                if (val) {
+                    statusEl.textContent = 'Key saved. Fetching AI estimate...';
+                    statusEl.className = 'key-status saved';
+                    fetchAiWaveEstimate().then(function () {
+                        setupAiRefresh();
+                    });
+                } else {
+                    statusEl.textContent = 'Key removed. AI estimates disabled.';
+                    statusEl.className = 'key-status';
+                    aiWaveLayer.clearLayers();
+                    latestAiEstimates = {};
+                    if (aiRefreshTimer) { clearInterval(aiRefreshTimer); aiRefreshTimer = null; }
+                }
+            });
+        }
+
+        function fetchWebcamSnapshot(snapshotUrl) {
+            function tryProxy(idx) {
+                if (idx >= CORS_PROXIES.length) {
+                    return Promise.reject(new Error('All CORS proxies failed'));
+                }
+                var url = CORS_PROXIES[idx] + encodeURIComponent(snapshotUrl);
+                return fetch(url)
+                    .then(function (r) {
+                        if (!r.ok) throw new Error('Proxy ' + idx + ': ' + r.status);
+                        return r.blob();
+                    })
+                    .then(function (blob) {
+                        return new Promise(function (resolve, reject) {
+                            var reader = new FileReader();
+                            reader.onloadend = function () {
+                                var base64 = reader.result.split(',')[1];
+                                resolve({ base64: base64, mimeType: blob.type || 'image/webp' });
+                            };
+                            reader.onerror = function () { reject(new Error('FileReader failed')); };
+                            reader.readAsDataURL(blob);
+                        });
+                    })
+                    .catch(function (err) {
+                        console.warn('CORS proxy ' + idx + ' failed:', err.message);
+                        return tryProxy(idx + 1);
+                    });
+            }
+            return tryProxy(0);
+        }
+
+        function callGeminiVision(imageData, locationDesc) {
+            var apiKey = getGeminiApiKey();
+            if (!apiKey) return Promise.reject(new Error('No Gemini API key'));
+
+            var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
+
+            var prompt = 'You are an expert ocean wave analyst. Analyze this beach webcam image from ' + locationDesc + '. ' +
+                'Estimate the current wave height in meters based on visual cues: wave face size relative to any visible people, buildings, ' +
+                'jetties, or other reference objects; whitecap coverage; wave breaking patterns; and overall sea state appearance. ' +
+                'Respond ONLY with valid JSON, no markdown, no code fences: ' +
+                '{"wave_height_m": <number 0.0-5.0>, "confidence": "<low|medium|high>", "description": "<1-sentence sea state>"} ' +
+                'If image is too dark, obscured, or does not show the sea: ' +
+                '{"wave_height_m": null, "confidence": "none", "description": "Unable to estimate: <reason>"}';
+
+            var body = {
+                contents: [{
+                    parts: [
+                        { text: prompt },
+                        { inline_data: { mime_type: imageData.mimeType, data: imageData.base64 } }
+                    ]
+                }],
+                generationConfig: { temperature: 0.2, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 512 } }
+            };
+
+            return fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            })
+            .then(function (r) {
+                if (!r.ok) {
+                    return r.json().catch(function () { return {}; }).then(function (body) {
+                        var msg = (body.error && body.error.message) || ('HTTP ' + r.status);
+                        throw new Error(msg);
+                    });
+                }
+                return r.json();
+            })
+            .then(function (data) {
+                // Gemini 2.5 returns thinking + answer parts; find the last non-thought part
+                var parts = data.candidates && data.candidates[0] &&
+                    data.candidates[0].content && data.candidates[0].content.parts;
+                if (!parts || !parts.length) throw new Error('Empty Gemini response');
+
+                var text = null;
+                for (var i = parts.length - 1; i >= 0; i--) {
+                    if (!parts[i].thought && parts[i].text) { text = parts[i].text; break; }
+                }
+                if (!text) throw new Error('No text in Gemini response');
+
+                text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+                // Extract first JSON object if surrounded by other text
+                var jsonMatch = text.match(/\{[\s\S]*\}/);
+                if (!jsonMatch) throw new Error('No JSON in response: ' + text.substring(0, 80));
+                var parsed = JSON.parse(jsonMatch[0]);
+
+                if (parsed.wave_height_m === null || parsed.wave_height_m === undefined) {
+                    return { height: null, confidence: parsed.confidence || 'none',
+                        description: parsed.description || 'Unable to estimate', timestamp: new Date(), error: null };
+                }
+
+                var h = parseFloat(parsed.wave_height_m);
+                if (isNaN(h) || h < 0 || h > 10) throw new Error('Unreasonable height: ' + parsed.wave_height_m);
+
+                return { height: h, confidence: parsed.confidence || 'medium',
+                    description: parsed.description || '', timestamp: new Date(), error: null };
+            });
+        }
+
+        function fetchAiWaveEstimate() {
+            if (!getGeminiApiKey()) {
+                latestAiEstimates = {};
+                return Promise.resolve();
+            }
+
+            var promises = AI_WEBCAMS.map(function (cam) {
+                return fetchWebcamSnapshot(cam.url)
+                    .then(function (imageData) { return callGeminiVision(imageData, cam.location); })
+                    .then(function (estimate) {
+                        latestAiEstimates[cam.station] = estimate;
+                        console.log('AI wave estimate (' + cam.station + '):', estimate);
+                    })
+                    .catch(function (err) {
+                        console.error('AI wave estimation failed (' + cam.station + '):', err);
+                        latestAiEstimates[cam.station] = { height: null, confidence: 'none',
+                            description: '', timestamp: new Date(), error: err.message };
+                    });
+            });
+
+            return Promise.all(promises).then(function () {
+                displayAiWaveBadges();
+            });
+        }
+
+        function displayAiWaveBadges() {
+            aiWaveLayer.clearLayers();
+
+            AI_WEBCAMS.forEach(function (cam) {
+                var est = latestAiEstimates[cam.station];
+                if (!est) return;
+
+                var station = STATIONS[cam.stationIndex];
+                var badgeLat = station.lat + cam.badgeOffset[0];
+                var badgeLon = station.lon + cam.badgeOffset[1];
+
+                var hasHeight = est.height !== null && !est.error;
+                var displayText = hasHeight ? est.height.toFixed(1) : '--';
+                var bgColor = hasHeight ? getWaveColor(est.height) : '#9e9e9e';
+                var opac = est.confidence === 'high' ? '1.0' : est.confidence === 'medium' ? '0.85' : '0.6';
+
+                var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="52" height="36" viewBox="0 0 52 36">' +
+                    '<polygon points="8,18 14,2 38,2 44,18 38,34 14,34" fill="' + bgColor + '" opacity="' + opac + '" stroke="#fff" stroke-width="1.5"/>' +
+                    '<rect x="10" y="8" width="8" height="6" rx="1" fill="rgba(255,255,255,0.7)"/>' +
+                    '<circle cx="14" cy="11" r="1.5" fill="rgba(255,255,255,0.9)"/>' +
+                    '<rect x="12" y="7" width="4" height="2" rx="0.5" fill="rgba(255,255,255,0.7)"/>' +
+                    '<text x="30" y="16" text-anchor="middle" font-size="13" font-weight="700" fill="#fff" font-family="Segoe UI,system-ui,sans-serif">' + displayText + '</text>' +
+                    '<text x="30" y="26" text-anchor="middle" font-size="8" font-weight="600" fill="rgba(255,255,255,0.8)" font-family="Segoe UI,system-ui,sans-serif">AI</text>' +
+                    '</svg>';
+
+                var popupHtml = '<div class="wind-popup">';
+                popupHtml += '<div class="popup-name">' + cam.station + ' &ndash; AI Wave Estimate</div>';
+                popupHtml += '<div class="popup-section popup-ai-estimate">';
+                popupHtml += '<div class="ai-label">Gemini Vision Estimate</div>';
+                if (hasHeight) {
+                    popupHtml += '<div class="ai-height" style="color:' + bgColor + '">' + est.height.toFixed(2) + ' m</div>';
+                    popupHtml += '<div class="ai-confidence">Confidence: ' + est.confidence + '</div>';
+                    if (est.description) popupHtml += '<div class="popup-detail" style="margin-top:4px">' + est.description + '</div>';
+                } else if (est.error) {
+                    popupHtml += '<div class="ai-error">Error: ' + est.error + '</div>';
+                } else {
+                    popupHtml += '<div class="ai-error">Unable to estimate from current image</div>';
+                    if (est.description) popupHtml += '<div class="popup-detail">' + est.description + '</div>';
+                }
+                popupHtml += '<div class="popup-detail" style="margin-top:4px;font-size:10px;color:#999">Updated: ' + est.timestamp.toLocaleTimeString() + '</div>';
+                popupHtml += '</div></div>';
+
+                aiWaveLayer.addLayer(L.marker([badgeLat, badgeLon], {
+                    icon: L.divIcon({
+                        html: svg,
+                        className: 'ai-wave-badge',
+                        iconSize: [52, 36],
+                        iconAnchor: [26, 18]
+                    })
+                }).bindPopup(popupHtml, { maxWidth: 280 }));
+            });
+        }
+
+        function setupAiRefresh() {
+            if (aiRefreshTimer) clearInterval(aiRefreshTimer);
+            if (!getGeminiApiKey()) return;
+            aiRefreshTimer = setInterval(function () {
+                fetchAiWaveEstimate();
+            }, AI_REFRESH_MINUTES * 60 * 1000);
+        }
+
+        // ============================================================
+        // ROUTE PLANNING
+        // ============================================================
+
+        var routeState = {
+            isDrawing: false,
+            waypoints: [],     // Array of L.LatLng
+            markers: [],       // Array of L.Marker (draggable waypoints)
+            labels: [],        // Array of L.Marker (distance label divIcons)
+            polyline: null,    // L.Polyline
+            isAutoCorrecting: false
+        };
+
+        function toggleRoutePanel() {
+            document.getElementById('routePanel').classList.toggle('collapsed');
+        }
+        window.toggleRoutePanel = toggleRoutePanel;
+
+        // ---- Draggable route panel ----
+        (function () {
+            var panel = document.getElementById('routePanel');
+            var header = document.getElementById('routePanelHeader');
+            var dragStartX, dragStartY, panelStartX, panelStartY, dragged;
+
+            header.addEventListener('mousedown', function (e) {
+                if (e.button !== 0) return;
+                dragged = false;
+                dragStartX = e.clientX;
+                dragStartY = e.clientY;
+                var rect = panel.getBoundingClientRect();
+                panelStartX = rect.left;
+                panelStartY = rect.top;
+                document.addEventListener('mousemove', onDragMove);
+                document.addEventListener('mouseup', onDragEnd);
+                e.preventDefault();
+            });
+
+            function onDragMove(e) {
+                var dx = e.clientX - dragStartX;
+                var dy = e.clientY - dragStartY;
+                if (!dragged && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+                dragged = true;
+                panel.style.left = Math.max(0, panelStartX + dx) + 'px';
+                panel.style.top = Math.max(0, panelStartY + dy) + 'px';
+            }
+
+            function onDragEnd() {
+                document.removeEventListener('mousemove', onDragMove);
+                document.removeEventListener('mouseup', onDragEnd);
+                if (!dragged) toggleRoutePanel();
+            }
+
+            // Touch support
+            header.addEventListener('touchstart', function (e) {
+                if (e.touches.length !== 1) return;
+                dragged = false;
+                var t = e.touches[0];
+                dragStartX = t.clientX;
+                dragStartY = t.clientY;
+                var rect = panel.getBoundingClientRect();
+                panelStartX = rect.left;
+                panelStartY = rect.top;
+                document.addEventListener('touchmove', onTouchMove, { passive: false });
+                document.addEventListener('touchend', onTouchEnd);
+            });
+
+            function onTouchMove(e) {
+                var t = e.touches[0];
+                var dx = t.clientX - dragStartX;
+                var dy = t.clientY - dragStartY;
+                if (!dragged && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+                dragged = true;
+                e.preventDefault();
+                panel.style.left = Math.max(0, panelStartX + dx) + 'px';
+                panel.style.top = Math.max(0, panelStartY + dy) + 'px';
+            }
+
+            function onTouchEnd() {
+                document.removeEventListener('touchmove', onTouchMove);
+                document.removeEventListener('touchend', onTouchEnd);
+                if (!dragged) toggleRoutePanel();
+            }
+        })();
+
+        function getRouteParams() {
+            return {
+                vesselType: document.getElementById('rVesselType').value,
+                loa: parseFloat(document.getElementById('rLOA').value) || 10,
+                beam: parseFloat(document.getElementById('rBeam').value) || 3,
+                draft: parseFloat(document.getElementById('rDraft').value) || 1.5,
+                safety: parseFloat(document.getElementById('rSafety').value) || 2,
+                speed: parseFloat(document.getElementById('rSpeed').value) || 6
+            };
+        }
+
+        function setRouteStatus(msg, cls) {
+            var el = document.getElementById('routeStatus');
+            el.textContent = msg;
+            el.className = 'route-status' + (cls ? ' ' + cls : '');
+        }
+
+        // ---- Haversine distance in nautical miles ----
+        function distanceNM(a, b) {
+            var R = 6371000;
+            var toRad = Math.PI / 180;
+            var dLat = (b.lat - a.lat) * toRad;
+            var dLon = (b.lng - a.lng) * toRad;
+            var lat1 = a.lat * toRad;
+            var lat2 = b.lat * toRad;
+            var sinDLat = Math.sin(dLat / 2);
+            var sinDLon = Math.sin(dLon / 2);
+            var h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon;
+            return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h)) / 1852;
+        }
+
+        // ---- Update distance labels on segments ----
+        function updateRouteLabels() {
+            routeState.labels.forEach(function (lbl) { routeLayer.removeLayer(lbl); });
+            routeState.labels = [];
+            var pts = routeState.waypoints;
+            var totalNM = 0;
+
+            for (var i = 0; i < pts.length - 1; i++) {
+                var a = pts[i], b = pts[i + 1];
+                var nm = distanceNM(a, b);
+                totalNM += nm;
+                var midLat = (a.lat + b.lat) / 2;
+                var midLng = (a.lng + b.lng) / 2;
+
+                var label = L.marker([midLat, midLng], {
+                    interactive: false,
+                    keyboard: false,
+                    icon: L.divIcon({
+                        className: 'route-label',
+                        iconSize: [80, 24],
+                        iconAnchor: [40, 12],
+                        html: '<div style="background:rgba(255,255,255,0.95);border:1.5px solid #0066ff;border-radius:4px;padding:2px 7px;font-size:12px;font-weight:700;color:#0050cc;white-space:nowrap;pointer-events:none;text-align:center;line-height:18px;box-shadow:0 1px 4px rgba(0,0,0,0.18)">' +
+                            nm.toFixed(1) + ' nm</div>'
+                    })
+                });
+                routeLayer.addLayer(label);
+                routeState.labels.push(label);
+            }
+
+            // Update summary
+            var summaryEl = document.getElementById('routeSummary');
+            if (pts.length >= 2) {
+                summaryEl.style.display = '';
+                document.getElementById('rTotalDist').textContent = totalNM.toFixed(1);
+                document.getElementById('rWpCount').textContent = pts.length;
+                var speed = getRouteParams().speed;
+                if (speed > 0) {
+                    var hours = totalNM / speed;
+                    var h = Math.floor(hours);
+                    var m = Math.round((hours - h) * 60);
+                    document.getElementById('rETA').textContent = h + 'h ' + (m < 10 ? '0' : '') + m + 'm';
+                } else {
+                    document.getElementById('rETA').textContent = '--';
+                }
+            } else {
+                summaryEl.style.display = 'none';
+            }
+        }
+
+        // ---- Sync polyline from waypoints ----
+        function syncPolyline() {
+            if (routeState.polyline) {
+                routeState.polyline.setLatLngs(routeState.waypoints);
+            }
+            updateRouteLabels();
+        }
+
+        // ---- Create draggable waypoint marker ----
+        function createWaypointMarker(latlng) {
+            var marker = L.marker(latlng, {
+                draggable: true,
+                icon: L.divIcon({
+                    className: 'route-waypoint-marker',
+                    iconSize: [16, 16],
+                    iconAnchor: [8, 8],
+                    html: '<div style="width:14px;height:14px;border-radius:50%;background:#0066ff;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>'
+                })
+            });
+
+            marker.on('drag', function () {
+                var idx = routeState.markers.indexOf(marker);
+                if (idx !== -1) {
+                    routeState.waypoints[idx] = marker.getLatLng();
+                    syncPolyline();
+                }
+            });
+
+            routeLayer.addLayer(marker);
+            return marker;
+        }
+
+        // ---- Interactive polyline with segment splitting ----
+
+        // Find nearest segment index and closest point on that segment
+        function findNearestSegment(latlng) {
+            var pts = routeState.waypoints;
+            if (pts.length < 2) return null;
+            var bestDist = Infinity;
+            var bestIdx = 0;
+            var bestPt = latlng;
+
+            for (var i = 0; i < pts.length - 1; i++) {
+                var proj = projectOnSegment(latlng, pts[i], pts[i + 1]);
+                if (proj.dist < bestDist) {
+                    bestDist = proj.dist;
+                    bestIdx = i;
+                    bestPt = proj.point;
+                }
+            }
+            return { segIndex: bestIdx, point: bestPt };
+        }
+
+        // Project a point onto a line segment, return closest point + distance
+        function projectOnSegment(p, a, b) {
+            var dx = b.lng - a.lng;
+            var dy = b.lat - a.lat;
+            var lenSq = dx * dx + dy * dy;
+            if (lenSq < 1e-14) return { point: L.latLng(a.lat, a.lng), dist: distSq(p, a) };
+
+            var t = ((p.lng - a.lng) * dx + (p.lat - a.lat) * dy) / lenSq;
+            t = Math.max(0, Math.min(1, t));
+            var proj = L.latLng(a.lat + t * dy, a.lng + t * dx);
+            return { point: proj, dist: distSq(p, proj) };
+        }
+
+        function distSq(a, b) {
+            var dx = a.lng - b.lng;
+            var dy = a.lat - b.lat;
+            return dx * dx + dy * dy;
+        }
+
+        // Insert a waypoint by splitting a segment
+        function insertWaypoint(latlng, afterIndex) {
+            routeState.waypoints.splice(afterIndex + 1, 0, latlng);
+            var marker = createWaypointMarker(latlng);
+            routeState.markers.splice(afterIndex + 1, 0, marker);
+            syncPolyline();
+            document.getElementById('rClearBtn').disabled = false;
+            if (routeState.waypoints.length >= 2) {
+                document.getElementById('rAutoBtn').disabled = false;
+                document.getElementById('rExportBtn').disabled = false;
+            }
+        }
+
+        function attachPolylineHandlers(polyline) {
+            polyline.on('mouseover', function () {
+                if (!routeState.isDrawing) {
+                    map.getContainer().style.cursor = 'copy';
+                }
+                polyline.setStyle({ weight: 6 });
+            });
+            polyline.on('mouseout', function () {
+                if (!routeState.isDrawing) {
+                    map.getContainer().style.cursor = '';
+                }
+                polyline.setStyle({ weight: 3 });
+            });
+            polyline.on('click', function (e) {
+                L.DomEvent.stopPropagation(e);  // prevent map click from adding endpoint
+                var hit = findNearestSegment(e.latlng);
+                if (hit) {
+                    insertWaypoint(hit.point, hit.segIndex);
+                }
+            });
+        }
+
+        function createRoutePolyline(latlngs) {
+            var polyline = L.polyline(latlngs, {
+                color: '#0066ff', weight: 3, opacity: 0.8, interactive: true
+            });
+            attachPolylineHandlers(polyline);
+            return polyline;
+        }
+
+        // ---- Drawing mode ----
+        function startRouteDraw() {
+            routeState.isDrawing = true;
+            map.getContainer().style.cursor = 'crosshair';
+            map.doubleClickZoom.disable();
+            if (!map.hasLayer(routeLayer)) map.addLayer(routeLayer);
+
+            var btn = document.getElementById('rDrawBtn');
+            btn.textContent = 'Finish Route';
+            btn.classList.add('drawing');
+            document.getElementById('rClearBtn').disabled = false;
+            setRouteStatus('Click on the map to add waypoints. Double-click to finish.', 'info');
+        }
+
+        function finishRouteDraw() {
+            routeState.isDrawing = false;
+            map.getContainer().style.cursor = '';
+            setTimeout(function () { map.doubleClickZoom.enable(); }, 300);
+
+            var btn = document.getElementById('rDrawBtn');
+            btn.textContent = 'Draw Route';
+            btn.classList.remove('drawing');
+
+            if (routeState.waypoints.length >= 2) {
+                document.getElementById('rAutoBtn').disabled = false;
+                document.getElementById('rExportBtn').disabled = false;
+                setRouteStatus('Route drawn: ' + routeState.waypoints.length + ' waypoints.', 'ok');
+            } else {
+                setRouteStatus('Need at least 2 waypoints.', 'error');
+            }
+        }
+
+        function toggleRouteDraw() {
+            if (routeState.isDrawing) {
+                finishRouteDraw();
+            } else {
+                clearRoute();
+                startRouteDraw();
+            }
+        }
+        window.toggleRouteDraw = toggleRouteDraw;
+
+        function clearRoute() {
+            routeState.isDrawing = false;
+            routeState.waypoints = [];
+            routeState.markers = [];
+            routeState.labels = [];
+            routeState.polyline = null;
+            routeLayer.clearLayers();
+            map.getContainer().style.cursor = '';
+            map.doubleClickZoom.enable();
+
+            var btn = document.getElementById('rDrawBtn');
+            btn.textContent = 'Draw Route';
+            btn.classList.remove('drawing');
+            document.getElementById('rClearBtn').disabled = true;
+            document.getElementById('rAutoBtn').disabled = true;
+            document.getElementById('rExportBtn').disabled = true;
+            document.getElementById('routeSummary').style.display = 'none';
+            setRouteStatus('', '');
+        }
+        window.clearRoute = clearRoute;
+
+        // Map click handler for route drawing
+        map.on('click', function (e) {
+            if (!routeState.isDrawing) return;
+
+            var latlng = e.latlng;
+            routeState.waypoints.push(latlng);
+
+            var marker = createWaypointMarker(latlng);
+            routeState.markers.push(marker);
+
+            if (!routeState.polyline) {
+                routeState.polyline = createRoutePolyline([latlng]);
+                routeLayer.addLayer(routeState.polyline);
+            } else {
+                routeState.polyline.addLatLng(latlng);
+            }
+
+            updateRouteLabels();
+            document.getElementById('rClearBtn').disabled = false;
+        });
+
+        // Double-click to finish drawing
+        map.on('dblclick', function (e) {
+            if (!routeState.isDrawing) return;
+            L.DomEvent.stop(e);
+
+            // Remove duplicate last waypoint added by the second click of dblclick
+            if (routeState.waypoints.length > 1) {
+                routeState.waypoints.pop();
+                var lastMarker = routeState.markers.pop();
+                if (lastMarker) routeLayer.removeLayer(lastMarker);
+                syncPolyline();
+            }
+            finishRouteDraw();
+        });
+
+        // Recalculate ETA when speed changes
+        document.getElementById('rSpeed').addEventListener('change', function () {
+            if (routeState.waypoints.length >= 2) updateRouteLabels();
+        });
+
+        // ============================================================
+        // ROUTE AUTO-CORRECT — EMODnet Depth
+        // ============================================================
+
+        function fetchDepthProfile(latlngs) {
+            // latlngs: array of L.LatLng — build LINESTRING(lon lat, lon lat, ...)
+            var coords = latlngs.map(function (ll) {
+                return ll.lng.toFixed(6) + ' ' + ll.lat.toFixed(6);
+            }).join(',');
+            var baseUrl = 'https://rest.emodnet-bathymetry.eu/depth_profile?geom=LINESTRING(' + coords + ')';
+
+            // Try direct first, then CORS proxies
+            return fetch(baseUrl)
+                .then(function (r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .catch(function () {
+                    // Try CORS proxy fallback
+                    var proxyUrl = CORS_PROXIES[0] + encodeURIComponent(baseUrl);
+                    return fetch(proxyUrl)
+                        .then(function (r) {
+                            if (!r.ok) throw new Error('Proxy HTTP ' + r.status);
+                            return r.json();
+                        })
+                        .catch(function () {
+                            var proxyUrl2 = CORS_PROXIES[1] + encodeURIComponent(baseUrl);
+                            return fetch(proxyUrl2)
+                                .then(function (r) {
+                                    if (!r.ok) throw new Error('All proxies failed');
+                                    return r.json();
+                                });
+                        });
+                });
+        }
+
+        // Interpolate a geographic point along a segment given a fraction [0,1]
+        function interpolateLatLng(a, b, frac) {
+            return L.latLng(
+                a.lat + frac * (b.lat - a.lat),
+                a.lng + frac * (b.lng - a.lng)
+            );
+        }
+
+        function autoCorrectRoute() {
+            if (routeState.waypoints.length < 2 || routeState.isAutoCorrecting) return;
+            routeState.isAutoCorrecting = true;
+
+            var params = getRouteParams();
+            var checkDepth = document.getElementById('rDepthCheck').checked;
+            var minDepth = checkDepth ? (params.draft + params.safety) : 0;
+            var autoBtn = document.getElementById('rAutoBtn');
+            autoBtn.disabled = true;
+            setRouteStatus(
+                checkDepth
+                    ? 'Checking land & depth (min ' + minDepth.toFixed(1) + 'm) along route...'
+                    : 'Checking route for land crossings...',
+                'info'
+            );
+
+            var wps = routeState.waypoints.map(function (ll) { return L.latLng(ll.lat, ll.lng); });
+
+            processSegments(wps, minDepth, 0)
+                .then(function (result) {
+                    if (result.warning) {
+                        setRouteStatus('Warning: ' + result.warning, 'error');
+                        L.popup({ closeButton: true, autoClose: false, className: 'route-warning-popup' })
+                            .setLatLng(map.getCenter())
+                            .setContent('<strong>⚠ Route Warning</strong><br>' + result.warning)
+                            .openOn(map);
+                    } else if (result.corrected) {
+                        rebuildRoute(result.waypoints);
+                        setRouteStatus(
+                            checkDepth
+                                ? 'Route corrected: avoiding land & areas shallower than ' + minDepth.toFixed(1) + 'm.'
+                                : 'Route corrected: rerouted around land.',
+                            'ok'
+                        );
+                    } else {
+                        setRouteStatus(
+                            checkDepth
+                                ? 'Route is safe! No land crossings, all depths exceed ' + minDepth.toFixed(1) + 'm.'
+                                : 'Route is safe! No land crossings detected.',
+                            'ok'
+                        );
+                    }
+                })
+                .catch(function (err) {
+                    console.error('Auto-correct error:', err);
+                    setRouteStatus('Error: ' + err.message, 'error');
+                    L.popup({ closeButton: true, autoClose: false, className: 'route-warning-popup' })
+                        .setLatLng(map.getCenter())
+                        .setContent('<strong>⚠ Route Error</strong><br>' + err.message)
+                        .openOn(map);
+                })
+                .finally(function () {
+                    routeState.isAutoCorrecting = false;
+                    autoBtn.disabled = false;
+                });
+        }
+        window.autoCorrectRoute = autoCorrectRoute;
+
+        // ---- Export route as GPX file ----
+        function exportRouteGPX() {
+            var wps = routeState.waypoints;
+            if (wps.length < 2) return;
+
+            var params = getRouteParams();
+            var now = new Date().toISOString();
+            var routeName = 'Route ' + new Date().toLocaleDateString('en-GB') + ' ' +
+                new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+            var xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+                '<gpx version="1.1" creator="Israel Coast Weather App"\n' +
+                '  xmlns="http://www.topografix.com/GPX/1/1"\n' +
+                '  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n' +
+                '  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">\n' +
+                '  <metadata>\n' +
+                '    <name>' + escapeXml(routeName) + '</name>\n' +
+                '    <desc>Vessel: ' + escapeXml(params.type) + ', LOA: ' + params.loa + 'm, Beam: ' + params.beam +
+                'm, Draft: ' + params.draft + 'm, Speed: ' + params.speed + 'kts</desc>\n' +
+                '    <time>' + now + '</time>\n' +
+                '  </metadata>\n';
+
+            // Waypoints (shown as individual marks on chart plotters)
+            wps.forEach(function (wp, i) {
+                var name = i === 0 ? 'START' : i === wps.length - 1 ? 'END' : 'WP' + (i + 1);
+                xml += '  <wpt lat="' + wp.lat.toFixed(7) + '" lon="' + wp.lng.toFixed(7) + '">\n' +
+                    '    <name>' + name + '</name>\n' +
+                    '  </wpt>\n';
+            });
+
+            // Route (the connected path for navigation)
+            xml += '  <rte>\n' +
+                '    <name>' + escapeXml(routeName) + '</name>\n';
+            wps.forEach(function (wp, i) {
+                var name = i === 0 ? 'START' : i === wps.length - 1 ? 'END' : 'WP' + (i + 1);
+                xml += '    <rtept lat="' + wp.lat.toFixed(7) + '" lon="' + wp.lng.toFixed(7) + '">\n' +
+                    '      <name>' + name + '</name>\n' +
+                    '    </rtept>\n';
+            });
+            xml += '  </rte>\n</gpx>\n';
+
+            // Trigger download
+            var blob = new Blob([xml], { type: 'application/gpx+xml' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = routeName.replace(/[\/\\:*?"<>|]/g, '-') + '.gpx';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            setRouteStatus('GPX file downloaded.', 'ok');
+        }
+
+        function escapeXml(s) {
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+        }
+
+        window.exportRouteGPX = exportRouteGPX;
+
+        // ---- Danger-zone detection ----
+
+        function findDangerZones(depths, minDepth) {
+            // depth values are negative (e.g. -9 = 9m deep), >= 0 = land
+            // minDepth = 0 → only detect land; minDepth > 0 → also detect shallow water
+            var zones = [];
+            var inZone = false;
+            var start = 0;
+
+            for (var i = 0; i < depths.length; i++) {
+                var isLand = depths[i] >= 0;
+                var isTooShallow = minDepth > 0 && depths[i] > -minDepth;
+                var isDanger = isLand || isTooShallow;
+                if (isDanger && !inZone) {
+                    start = i;
+                    inZone = true;
+                } else if (!isDanger && inZone) {
+                    zones.push({ start: start, end: i - 1 });
+                    inZone = false;
+                }
+            }
+            if (inZone) zones.push({ start: start, end: depths.length - 1 });
+            return zones;
+        }
+
+        // ---- Arc-based detour generation ----
+
+        function generateArcPoints(entry, exit, side, radiusMetres, numPts) {
+            // Create a smooth arc from entry to exit, bulging perpendicular by radiusMetres.
+            // Uses semicircular bulge: sqrt(1 - (2t-1)^2) which maintains high offset
+            // near entry/exit (unlike sin which drops to 0).
+            // side: 1 = left of travel, -1 = right of travel
+            var dx = exit.lng - entry.lng;
+            var dy = exit.lat - entry.lat;
+            var segLen = Math.sqrt(dx * dx + dy * dy);
+            if (segLen < 1e-10) return [];
+
+            // Perpendicular unit vector
+            var perpLat = (-dx / segLen) * side;
+            var perpLng = (dy / segLen) * side;
+
+            var midLat = (entry.lat + exit.lat) / 2;
+            var latDeg = radiusMetres / 111320;
+            var lngDeg = radiusMetres / (111320 * Math.cos(midLat * Math.PI / 180));
+
+            var points = [];
+            for (var i = 1; i <= numPts; i++) {
+                var t = i / (numPts + 1);
+                // Semicircular bulge: high offset even near endpoints
+                var u = 2 * t - 1; // maps [0,1] to [-1,1]
+                var bulge = Math.sqrt(Math.max(0, 1 - u * u));
+                points.push(L.latLng(
+                    entry.lat + t * (exit.lat - entry.lat) + perpLat * latDeg * bulge,
+                    entry.lng + t * (exit.lng - entry.lng) + perpLng * lngDeg * bulge
+                ));
+            }
+            return points;
+        }
+
+        function isPathSafe(depths, minDepth) {
+            if (!depths || !depths.length) return false;
+            for (var i = 0; i < depths.length; i++) {
+                if (depths[i] >= 0) return false;                       // land
+                if (minDepth > 0 && depths[i] > -minDepth) return false; // too shallow
+            }
+            return true;
+        }
+
+        function findArcDetour(entry, exit, minDepth) {
+            // Try arcs at increasing radii on both sides; pick smallest that works.
+            // Radii range from 500m to 200km to handle everything from reefs to large islands.
+            var radii = [500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 150000, 200000];
+            var numPts = 11;
+
+            function tryRadius(ridx) {
+                if (ridx >= radii.length) {
+                    console.warn('Auto-correct: no safe arc found up to ' + (radii[radii.length - 1] / 1000) + 'km');
+                    return Promise.resolve(null);
+                }
+                var r = radii[ridx];
+                var arcLeft = generateArcPoints(entry, exit, 1, r, numPts);
+                var arcRight = generateArcPoints(entry, exit, -1, r, numPts);
+
+                // Validate full path (entry → arc → exit) for each side
+                var pathLeft = [entry].concat(arcLeft).concat([exit]);
+                var pathRight = [entry].concat(arcRight).concat([exit]);
+
+                return Promise.all([
+                    fetchDepthProfile(pathLeft).then(function (d) { return isPathSafe(d, minDepth); }).catch(function () { return false; }),
+                    fetchDepthProfile(pathRight).then(function (d) { return isPathSafe(d, minDepth); }).catch(function () { return false; })
+                ]).then(function (results) {
+                    if (results[0]) return { points: arcLeft };
+                    if (results[1]) return { points: arcRight };
+                    return tryRadius(ridx + 1);
+                });
+            }
+
+            return tryRadius(0);
+        }
+
+        // ---- Core segment processing ----
+
+        function processSegments(waypoints, minDepth, iteration) {
+            if (iteration >= 4) {
+                return Promise.resolve({ waypoints: waypoints, corrected: true });
+            }
+
+            // Fetch depth profiles for all segments in parallel
+            var profilePromises = [];
+            for (var i = 0; i < waypoints.length - 1; i++) {
+                (function (idx) {
+                    profilePromises.push(
+                        fetchDepthProfile([waypoints[idx], waypoints[idx + 1]])
+                            .then(function (depths) { return { index: idx, depths: depths }; })
+                    );
+                })(i);
+            }
+
+            return Promise.all(profilePromises).then(function (results) {
+                // Collect all danger zones across all segments
+                var allDetours = []; // { segIndex, entry, exit }
+
+                results.forEach(function (seg) {
+                    var depths = seg.depths;
+                    if (!depths || !depths.length) return;
+                    var a = waypoints[seg.index];
+                    var b = waypoints[seg.index + 1];
+                    var zones = findDangerZones(depths, minDepth);
+                    if (zones.length === 0) return;
+
+                    zones.forEach(function (zone) {
+                        // Place entry/exit well into safe water.
+                        // Use at least 5% of segment length or 5km worth of fraction,
+                        // whichever is larger — ensures the arc starts in open water.
+                        var segDistNM = distanceNM(a, b);
+                        var fiveKmFrac = segDistNM > 0 ? (2.7 / segDistNM) : 0.05; // 5km ≈ 2.7nm
+                        var margin = Math.max(0.05, Math.min(fiveKmFrac, 0.2));
+                        var entryFrac = Math.max(0, zone.start / (depths.length - 1) - margin);
+                        var exitFrac = Math.min(1, zone.end / (depths.length - 1) + margin);
+                        allDetours.push({
+                            segIndex: seg.index,
+                            entry: interpolateLatLng(a, b, entryFrac),
+                            exit: interpolateLatLng(a, b, exitFrac)
+                        });
+                    });
+                });
+
+                if (allDetours.length === 0) {
+                    return { waypoints: waypoints, corrected: iteration > 0 };
+                }
+
+                var label = minDepth > 0 ? 'obstacles (land/shallow)' : 'land';
+                setRouteStatus('Found ' + label + ' on ' + allDetours.length + ' zone(s), computing arcs (pass ' + (iteration + 1) + ')...', 'info');
+
+                // Find arc detours for every zone
+                var arcPromises = allDetours.map(function (d) {
+                    return findArcDetour(d.entry, d.exit, minDepth)
+                        .then(function (arc) { return { segIndex: d.segIndex, entry: d.entry, exit: d.exit, arc: arc }; });
+                });
+
+                return Promise.all(arcPromises).then(function (arcResults) {
+                    // Check for failed detours
+                    var failed = arcResults.filter(function (r) { return !r.arc; });
+                    if (failed.length > 0) {
+                        console.warn('Auto-correct: ' + failed.length + ' zone(s) could not be rerouted');
+                    }
+
+                    // Group by segment index
+                    var bySeg = {};
+                    arcResults.forEach(function (r) {
+                        if (!bySeg[r.segIndex]) bySeg[r.segIndex] = [];
+                        bySeg[r.segIndex].push(r);
+                    });
+
+                    // Rebuild waypoints with detours spliced in
+                    var newWaypoints = [waypoints[0]];
+                    for (var i = 0; i < waypoints.length - 1; i++) {
+                        if (bySeg[i]) {
+                            bySeg[i].forEach(function (d) {
+                                if (d.arc && d.arc.points && d.arc.points.length) {
+                                    newWaypoints.push(d.entry);
+                                    d.arc.points.forEach(function (p) { newWaypoints.push(p); });
+                                    newWaypoints.push(d.exit);
+                                }
+                            });
+                        }
+                        newWaypoints.push(waypoints[i + 1]);
+                    }
+
+                    // If some zones couldn't be resolved, warn user
+                    if (failed.length > 0 && newWaypoints.length === waypoints.length) {
+                        return { waypoints: waypoints, corrected: false,
+                            warning: failed.length + ' obstacle(s) could not be rerouted (too large)' };
+                    }
+
+                    // Re-check the corrected route
+                    return processSegments(newWaypoints, minDepth, iteration + 1);
+                });
+            });
+        }
+
+        function rebuildRoute(newWaypoints) {
+            // Clear existing markers/labels/polyline
+            routeState.markers.forEach(function (m) { routeLayer.removeLayer(m); });
+            routeState.labels.forEach(function (l) { routeLayer.removeLayer(l); });
+            if (routeState.polyline) routeLayer.removeLayer(routeState.polyline);
+
+            routeState.waypoints = newWaypoints;
+            routeState.markers = [];
+            routeState.labels = [];
+
+            // Recreate markers
+            newWaypoints.forEach(function (ll) {
+                var marker = createWaypointMarker(ll);
+                routeState.markers.push(marker);
+            });
+
+            // Recreate polyline
+            routeState.polyline = createRoutePolyline(newWaypoints);
+            routeLayer.addLayer(routeState.polyline);
+
+            updateRouteLabels();
+        }
+
+        // ============================================================
+        // INIT
+        // ============================================================
+
+        initApiKeyUI();
+        initBoat();
+        refreshData();
+        setupAutoRefresh();
+
+    })();
+    </script>
+</body>
+</html>
