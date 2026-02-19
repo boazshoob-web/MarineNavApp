@@ -818,6 +818,7 @@
                 <div class="progress-bar"><div class="progress-fill" id="dlProgressFill" style="width:0%"></div></div>
             </div>
             <div class="dl-storage-info" id="dlStorageInfo"></div>
+            <button onclick="clearAllCache()" style="margin-top:10px;padding:6px 12px;border:1px solid #c62828;border-radius:5px;background:#fff;color:#c62828;font-size:11px;font-weight:600;cursor:pointer;width:100%">Clear All Cached Data</button>
         </div>
     </div>
 
@@ -2974,12 +2975,16 @@
         function saveRouteOffline() {
             if (routeState.waypoints.length < 2) return;
 
+            var now = new Date();
+            var defaultName = 'Route ' + now.toLocaleDateString('en-GB') + ' ' +
+                now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            var routeName = prompt('Name this route:', defaultName);
+            if (!routeName) return;  // user cancelled
+            routeName = routeName.trim() || defaultName;
+
             var btn = document.getElementById('rSaveOfflineBtn');
             btn.disabled = true;
-            var now = new Date();
             var routeId = 'route_' + now.getTime();
-            var routeName = 'Route ' + now.toLocaleDateString('en-GB') + ' ' +
-                now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
             var wpData = routeState.waypoints.map(function (ll) {
                 return { lat: ll.lat, lng: ll.lng };
@@ -3355,6 +3360,49 @@
         // Update estimate when zoom inputs change
         document.getElementById('dlZoomMin').addEventListener('change', updateDlEstimate);
         document.getElementById('dlZoomMax').addEventListener('change', updateDlEstimate);
+
+        function clearAllCache() {
+            if (!confirm('This will delete all cached map tiles, weather data, and saved offline routes.\n\nAre you sure?')) return;
+
+            var promises = [];
+
+            // Clear all Cache API caches (tiles, CDN, shell)
+            promises.push(
+                caches.keys().then(function (names) {
+                    return Promise.all(names.map(function (name) {
+                        return caches.delete(name);
+                    }));
+                })
+            );
+
+            // Clear IndexedDB (weather, routes, tiles stores)
+            promises.push(
+                openDB().then(function (db) {
+                    var storeNames = [STORE_WEATHER, STORE_ROUTES, STORE_TILES];
+                    return Promise.all(storeNames.map(function (name) {
+                        return new Promise(function (resolve, reject) {
+                            var tx = db.transaction(name, 'readwrite');
+                            tx.objectStore(name).clear();
+                            tx.oncomplete = resolve;
+                            tx.onerror = function () { reject(tx.error); };
+                        });
+                    }));
+                })
+            );
+
+            Promise.all(promises).then(function () {
+                refreshOfflineRouteList();
+                updateStorageInfo();
+                alert('All cached data has been cleared.');
+                // Re-register SW caches on next fetch
+                if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.controller.postMessage({ type: 'recache' });
+                }
+            }).catch(function (err) {
+                alert('Error clearing cache: ' + err.message);
+            });
+        }
+        window.clearAllCache = clearAllCache;
 
         // ---- Danger-zone detection ----
 
