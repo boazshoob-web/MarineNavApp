@@ -317,7 +317,8 @@
             border-radius: 10px;
             box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
             backdrop-filter: blur(8px);
-            min-width: 220px;
+            min-width: 132px;
+            max-width: 230px;
             overflow: hidden;
             transition: max-height 0.3s ease;
         }
@@ -340,29 +341,32 @@
             font-size: 14px; color: #0050cc; transition: transform 0.3s;
         }
         .route-panel.collapsed .route-panel-toggle { transform: rotate(-90deg); }
-        .route-panel-body { padding: 12px 14px; }
+        .route-panel-body { padding: 8px 10px; }
         .route-panel.collapsed .route-panel-body { display: none; }
+        .route-fields {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 3px 6px;
+        }
         .route-field {
-            display: flex; align-items: center; gap: 6px;
-            margin-bottom: 6px;
+            display: flex; align-items: center; gap: 3px;
         }
         .route-field label {
-            font-size: 11px; color: #555; min-width: 58px;
+            font-size: 10px; color: #555; min-width: 32px;
         }
         .route-field input[type="number"], .route-field select {
-            flex: 1; padding: 4px 6px; border: 1px solid #ccc;
-            border-radius: 4px; font-size: 12px; max-width: 80px;
+            flex: 1; padding: 3px 4px; border: 1px solid #ccc;
+            border-radius: 4px; font-size: 11px; max-width: 52px; min-width: 0;
         }
         .route-field input:focus, .route-field select:focus {
             outline: none; border-color: #0066ff;
             box-shadow: 0 0 0 2px rgba(0,102,255,0.15);
         }
         .route-field span { font-size: 10px; color: #888; }
-        .route-buttons { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+        .route-field-full { grid-column: 1 / -1; }
+        .route-buttons { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; }
         .route-btn {
-            flex: 1; min-width: 90px; padding: 6px 8px;
+            flex: 1; min-width: 0; padding: 5px 4px;
             border: none; border-radius: 5px;
-            font-size: 11px; font-weight: 600; cursor: pointer;
+            font-size: 10px; font-weight: 600; cursor: pointer;
             transition: background 0.2s, opacity 0.2s;
         }
         .route-btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -374,9 +378,9 @@
         .route-btn-clear:hover:not(:disabled) { background: #ccc; }
         .route-btn-auto { background: #00897b; color: #fff; min-width: 100%; }
         .route-btn-auto:hover:not(:disabled) { background: #00796b; }
-        .route-btn-export { background: #5c6bc0; color: #fff; min-width: 100%; }
+        .route-btn-export { background: #5c6bc0; color: #fff; }
         .route-btn-export:hover:not(:disabled) { background: #3f51b5; }
-        .route-btn-save { background: #e65100; color: #fff; min-width: 100%; }
+        .route-btn-save { background: #e65100; color: #fff; }
         .route-btn-save:hover:not(:disabled) { background: #bf360c; }
         .offline-routes { margin-top: 10px; border-top: 1px solid #e0e0e0; padding-top: 8px; }
         .offline-routes h4 { font-size: 11px; color: #555; margin-bottom: 6px; }
@@ -653,34 +657,36 @@
             <span class="route-panel-toggle">&#9660;</span>
         </div>
         <div class="route-panel-body">
-            <div class="route-field">
-                <label>Vessel</label>
-                <select id="rVesselType"><option value="motor">Motor</option><option value="sail">Sail</option></select>
-            </div>
-            <div class="route-field">
-                <label>LOA</label>
-                <input type="number" id="rLOA" value="10" min="1" max="200" step="0.1"><span>m</span>
-            </div>
-            <div class="route-field">
-                <label>Beam</label>
-                <input type="number" id="rBeam" value="3" min="0.5" max="30" step="0.1"><span>m</span>
-            </div>
-            <div class="route-field">
-                <label>Draft</label>
-                <input type="number" id="rDraft" value="1.5" min="0.1" max="20" step="0.1"><span>m</span>
-            </div>
-            <div class="route-field">
-                <label>Safety</label>
-                <input type="number" id="rSafety" value="2" min="0" max="20" step="0.5"><span>m</span>
-            </div>
-            <div class="route-field">
-                <label>Speed</label>
-                <input type="number" id="rSpeed" value="6" min="0.5" max="50" step="0.5"><span>kts</span>
-            </div>
-            <div class="route-field" style="margin-top:4px">
-                <label for="rDepthCheck" style="min-width:0;flex:1;display:flex;align-items:center;gap:6px;cursor:pointer">
-                    <input type="checkbox" id="rDepthCheck" checked style="margin:0;cursor:pointer"> Check depth clearance
-                </label>
+            <div class="route-fields">
+                <div class="route-field">
+                    <label>Vessel</label>
+                    <select id="rVesselType"><option value="motor">Motor</option><option value="sail">Sail</option></select>
+                </div>
+                <div class="route-field">
+                    <label>Speed</label>
+                    <input type="number" id="rSpeed" value="6" min="0.5" max="50" step="0.5"><span>kts</span>
+                </div>
+                <div class="route-field">
+                    <label>LOA</label>
+                    <input type="number" id="rLOA" value="10" min="1" max="200" step="0.1"><span>m</span>
+                </div>
+                <div class="route-field">
+                    <label>Beam</label>
+                    <input type="number" id="rBeam" value="3" min="0.5" max="30" step="0.1"><span>m</span>
+                </div>
+                <div class="route-field">
+                    <label>Draft</label>
+                    <input type="number" id="rDraft" value="1.5" min="0.1" max="20" step="0.1"><span>m</span>
+                </div>
+                <div class="route-field">
+                    <label>Safety</label>
+                    <input type="number" id="rSafety" value="2" min="0" max="20" step="0.5"><span>m</span>
+                </div>
+                <div class="route-field route-field-full" style="margin-top:2px">
+                    <label for="rDepthCheck" style="min-width:0;flex:1;display:flex;align-items:center;gap:6px;cursor:pointer">
+                        <input type="checkbox" id="rDepthCheck" checked style="margin:0;cursor:pointer"> Check depth clearance
+                    </label>
+                </div>
             </div>
             <div class="route-buttons">
                 <button class="route-btn route-btn-draw" id="rDrawBtn" onclick="toggleRouteDraw()">Draw Route</button>
