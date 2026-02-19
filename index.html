@@ -905,6 +905,11 @@
             rows: 12, cols: 12
         };
 
+        // Depth contour grid (coastal strip)
+        var DEPTH_LEVELS = [5, 10, 20, 50, 100, 200];
+        var DEPTH_MAJOR = {10: true, 50: true, 200: true};
+        var _depthBounds = null; // {latMin, latMax, lonMin, lonMax, rows, cols}
+
         var WIND_COLORS = [
             { max: 5,        color: '#3288bd' },
             { max: 10,       color: '#66c2a5' },
@@ -959,6 +964,8 @@
         var waveLayer = L.layerGroup();
         var isobarLayer = L.layerGroup();
         var isobarLabelLayer = L.layerGroup();
+        var depthContourLayer = L.layerGroup();
+        var depthContourLabelLayer = L.layerGroup();
         var aiWaveLayer = L.layerGroup();
         var routeLayer = L.layerGroup();
         var boatLayer = L.layerGroup();
@@ -975,6 +982,8 @@
             'Wave Heights': waveLayer,
             'Isobars': isobarLayer,
             'Isobar Labels': isobarLabelLayer,
+            'Depth Contours': depthContourLayer,
+            'Depth Labels': depthContourLabelLayer,
             'AI Wave Estimate': aiWaveLayer,
             'Route': routeLayer,
             'Boat': boatLayer,
@@ -988,12 +997,89 @@
             if (e.layer === legendToggle) {
                 document.querySelector('.legend').style.display = '';
             }
+            // Load depth contours for current view on enable
+            if (e.layer === depthContourLayer) {
+                loadOrFetchDepthContours();
+            }
         });
         map.on('overlayremove', function (e) {
             if (e.layer === legendToggle) {
                 document.querySelector('.legend').style.display = 'none';
             }
         });
+
+        // ---- Depth contour lazy loading + dynamic bounds ----
+
+        var _depthGridCache = null;   // {bounds, grid} for current view
+        var _depthFetchTimer = null;
+        var _depthFetching = false;
+
+        function getMapDepthBounds() {
+            var b = map.getBounds();
+            return {
+                latMin: b.getSouth(),
+                latMax: b.getNorth(),
+                lonMin: b.getWest(),
+                lonMax: b.getEast()
+            };
+        }
+
+        function boundsOverlap(a, b) {
+            // Check if cached bounds still cover most of the current view
+            if (!a || !b) return false;
+            var latRange = b.latMax - b.latMin;
+            var lonRange = b.lonMax - b.lonMin;
+            var latOverlap = Math.min(a.latMax, b.latMax) - Math.max(a.latMin, b.latMin);
+            var lonOverlap = Math.min(a.lonMax, b.lonMax) - Math.max(a.lonMin, b.lonMin);
+            return latOverlap > latRange * 0.5 && lonOverlap > lonRange * 0.5;
+        }
+
+        // Re-fetch depth contours when user pans/zooms (debounced)
+        map.on('moveend', function () {
+            if (!map.hasLayer(depthContourLayer)) return;
+            if (_depthFetching) return;
+            var newBounds = getMapDepthBounds();
+            if (_depthGridCache && boundsOverlap(_depthGridCache.bounds, newBounds)) return;
+            clearTimeout(_depthFetchTimer);
+            _depthFetchTimer = setTimeout(function () {
+                loadOrFetchDepthContours();
+            }, 1000);
+        });
+
+        function loadOrFetchDepthContours() {
+            var statusEl = document.getElementById('status');
+            var bounds = getMapDepthBounds();
+
+            // Check in-memory cache — reuse if view hasn't changed much
+            if (_depthGridCache && boundsOverlap(_depthGridCache.bounds, bounds)) {
+                _depthBounds = _depthGridCache.bounds;
+                displayDepthContours(_depthGridCache.grid);
+                return;
+            }
+
+            // Fetch from EMODnet WCS (single request for full 2D grid)
+            _depthFetching = true;
+            statusEl.className = 'status loading';
+            statusEl.textContent = 'Loading depth contours...';
+            fetchDepthGrid(bounds).then(function (result) {
+                _depthFetching = false;
+                // result = {grid, bounds, rows, cols}
+                var actualBounds = result.bounds;
+                actualBounds.rows = result.rows;
+                actualBounds.cols = result.cols;
+                _depthBounds = actualBounds;
+                _depthGridCache = { bounds: actualBounds, grid: result.grid };
+                displayDepthContours(result.grid);
+                // Cache in IndexedDB for offline
+                dbPut('depthGrid', { timestamp: Date.now(), bounds: actualBounds, grid: result.grid }).catch(function () {});
+                statusEl.className = 'status ok';
+                statusEl.textContent = 'Depth contours loaded (' + result.cols + 'x' + result.rows + ' grid)';
+            }).catch(function (err) {
+                _depthFetching = false;
+                statusEl.className = 'status error';
+                statusEl.textContent = 'Depth contours: ' + err.message;
+            });
+        }
 
         // ============================================================
         // FLOATING MENU & PANEL TOGGLE
@@ -1325,6 +1411,66 @@
                 .catch(function (err) { console.warn('Pressure grid fetch failed:', err.message); return null; });
         }
 
+        // ---- Depth contour grid via EMODnet WCS (single request, proper 2D grid) ----
+
+        function parseWCSResponse(text) {
+            // Extract grid bounds
+            var bm = text.match(/GeneralBounds\[\(([^,]+),\s*([^)]+)\),\s*\(([^,]+),\s*([^)]+)\)\]/);
+            if (!bm) return null;
+            var lonMin = parseFloat(bm[1]);
+            var latMin = parseFloat(bm[2]);
+            var lonMax = parseFloat(bm[3]);
+            var latMax = parseFloat(bm[4]);
+
+            // Extract data after "Band 0:"
+            var dataStart = text.indexOf('Band 0:');
+            if (dataStart < 0) return null;
+            var dataText = text.substring(dataStart + 7).trim();
+            var lines = dataText.split('\n').filter(function (l) { return l.trim().length > 0; });
+
+            // WCS returns rows from north (top) to south (bottom)
+            // Reverse so grid[0] = southernmost row (matches our convention)
+            var grid = [];
+            for (var i = lines.length - 1; i >= 0; i--) {
+                var vals = lines[i].trim().split(/\s+/).map(function (v) {
+                    var n = parseFloat(v);
+                    return isNaN(n) ? 0 : n;
+                });
+                grid.push(vals);
+            }
+
+            return {
+                grid: grid,
+                bounds: { latMin: latMin, latMax: latMax, lonMin: lonMin, lonMax: lonMax },
+                rows: grid.length,
+                cols: grid[0].length
+            };
+        }
+
+        function fetchDepthGrid(bounds) {
+            var lonRange = bounds.lonMax - bounds.lonMin;
+            // Compute scalefactor to get ~120 columns regardless of view size
+            var sf = Math.max(0.005, Math.min(0.5, 0.125 / lonRange));
+            var url = 'https://ows.emodnet-bathymetry.eu/wcs?SERVICE=WCS&VERSION=2.0.1' +
+                '&REQUEST=GetCoverage&CoverageId=emodnet__mean&FORMAT=text/plain' +
+                '&SUBSET=Long(' + bounds.lonMin.toFixed(4) + ',' + bounds.lonMax.toFixed(4) + ')' +
+                '&SUBSET=Lat(' + bounds.latMin.toFixed(4) + ',' + bounds.latMax.toFixed(4) + ')' +
+                '&SCALEFACTOR=' + sf.toFixed(6);
+
+            return fetch(url)
+                .then(function (r) {
+                    if (!r.ok) throw new Error('WCS HTTP ' + r.status);
+                    return r.text();
+                })
+                .then(function (text) {
+                    var result = parseWCSResponse(text);
+                    if (!result || result.rows < 3 || result.cols < 3) {
+                        throw new Error('Insufficient depth data for this area');
+                    }
+                    return result;
+                });
+        }
+
         // ============================================================
         // WIND + WAVE DISPLAY
         // ============================================================
@@ -1531,6 +1677,14 @@
             ];
         }
 
+        function depthGridToLatLon(rc) {
+            var b = _depthBounds;
+            return [
+                b.latMin + rc[0] * (b.latMax - b.latMin) / (b.rows - 1),
+                b.lonMin + rc[1] * (b.lonMax - b.lonMin) / (b.cols - 1)
+            ];
+        }
+
         function connectSegments(segments) {
             if (!segments.length) return [];
             var EPS = 0.001, used = {}, paths = [];
@@ -1597,6 +1751,39 @@
                             icon: L.divIcon({
                                 html: '<div style="font-size:10px;font-weight:600;color:#5040b0;background:rgba(255,255,255,0.85);padding:1px 4px;border-radius:3px;white-space:nowrap;pointer-events:none;border:1px solid rgba(106,90,205,0.3)">' + level + '</div>',
                                 className: 'isobar-label', iconSize: [0,0], iconAnchor: [-4,6]
+                            }),
+                            interactive: false
+                        }));
+                    }
+                });
+            }
+        }
+
+        function displayDepthContours(depthGrid) {
+            depthContourLayer.clearLayers();
+            depthContourLabelLayer.clearLayers();
+            for (var li = 0; li < DEPTH_LEVELS.length; li++) {
+                var depth = DEPTH_LEVELS[li];
+                var threshold = -depth; // e.g. 50m depth → threshold -50
+                var segs = marchingSquares(depthGrid, threshold);
+                if (!segs.length) continue;
+                var paths = connectSegments(segs);
+                var isMajor = !!DEPTH_MAJOR[depth];
+                paths.forEach(function (p) {
+                    if (p.length < 3) return; // skip tiny fragments
+                    var ll = smoothPath(p.map(depthGridToLatLon), 1);
+                    var line = L.polyline(ll, {
+                        color: '#00796b', weight: isMajor ? 2.2 : 1,
+                        opacity: isMajor ? 0.8 : 0.4, dashArray: isMajor ? null : '4,4'
+                    });
+                    line.bindTooltip(depth + 'm', { sticky: true, opacity: 0.9 });
+                    depthContourLayer.addLayer(line);
+                    if (isMajor && ll.length > 6) {
+                        var mid = ll[Math.floor(ll.length / 2)];
+                        depthContourLabelLayer.addLayer(L.marker(mid, {
+                            icon: L.divIcon({
+                                html: '<div style="font-size:10px;font-weight:600;color:#00695c;background:rgba(255,255,255,0.85);padding:1px 4px;border-radius:3px;white-space:nowrap;pointer-events:none;border:1px solid rgba(0,121,107,0.3)">' + depth + 'm</div>',
+                                className: 'depth-label', iconSize: [0,0], iconAnchor: [-4,6]
                             }),
                             interactive: false
                         }));
