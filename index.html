@@ -6,6 +6,7 @@
     <title>Israel Coast Wind, Waves &amp; Pressure</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4a90d9">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="IL Coast">
@@ -810,6 +811,19 @@
                 <div class="progress-bar"><div class="progress-fill" id="dlProgressFill" style="width:0%"></div></div>
             </div>
             <div class="dl-storage-info" id="dlStorageInfo"></div>
+        </div>
+    </div>
+
+    <!-- Route Delete Confirmation Dialog -->
+    <div class="dl-area-dialog" id="deleteRouteDialog" onclick="if(event.target===this)closeDeleteRouteDialog()">
+        <div class="dl-area-box">
+            <h3>Delete Offline Route</h3>
+            <div class="dl-info" id="deleteRouteInfo"></div>
+            <div class="dl-area-btns" style="flex-direction:column">
+                <button class="dl-btn-download" id="deleteRouteBoth" style="background:#c62828">Delete Route &amp; Map Tiles</button>
+                <button class="dl-btn-download" id="deleteRouteOnly" style="background:#e65100">Delete Route Only (keep tiles)</button>
+                <button class="dl-btn-cancel" onclick="closeDeleteRouteDialog()">Cancel</button>
+            </div>
         </div>
     </div>
 
@@ -2880,15 +2894,17 @@
             var total = allTiles.length;
             var done = 0;
             var savedBytes = 0;
+            var cachedUrls = [];
             var BATCH = 6;  // concurrent fetches
 
             function processBatch(idx) {
-                if (idx >= total) return Promise.resolve(savedBytes);
+                if (idx >= total) return Promise.resolve({ bytes: savedBytes, urls: cachedUrls });
                 var batch = allTiles.slice(idx, idx + BATCH);
                 return Promise.all(batch.map(function (t) {
                     var url = tileUrl(t.z, t.x, t.y);
                     return fetch(url).then(function (r) {
                         if (!r.ok) return 0;
+                        cachedUrls.push(url);
                         return r.blob().then(function (blob) {
                             savedBytes += blob.size;
                             return blob.size;
@@ -3009,6 +3025,7 @@
             });
             var params = getRouteParams();
             var totalTileBytes = 0;
+            var tileUrls = [];
 
             setSaveProgress('Fetching depth profiles...', 5);
 
@@ -3022,8 +3039,9 @@
                         totalTileBytes = bytes;
                         var pct = 15 + Math.floor((done / total) * 70);
                         setSaveProgress('Downloading tiles: ' + done + '/' + total + ' (' + formatBytes(bytes) + ')', pct);
-                    }).then(function (bytes) {
-                        totalTileBytes = bytes;
+                    }).then(function (result) {
+                        totalTileBytes = result.bytes;
+                        tileUrls = result.urls;
                         return depthProfiles;
                     });
                 })
@@ -3041,6 +3059,7 @@
                         depthProfiles: depthProfiles,
                         weather: weather,
                         tileBytes: totalTileBytes,
+                        tileUrls: tileUrls,
                         bounds: getRouteBounds(wpData, OFFLINE_MARGIN_DEG)
                     };
 
@@ -3110,10 +3129,101 @@
         }
         window.loadOfflineRoute = loadOfflineRoute;
 
-        function deleteOfflineRoute(routeId) {
-            dbDeleteStore(STORE_ROUTES, routeId).then(function () {
+        function findUniqueTiles(routeId) {
+            return dbGetStore(STORE_ROUTES, routeId).then(function (route) {
+                if (!route || !route.tileUrls || route.tileUrls.length === 0) {
+                    return { route: route, uniqueUrls: [], uniqueBytes: 0 };
+                }
+                return dbGetAllKeys(STORE_ROUTES).then(function (keys) {
+                    var otherKeys = keys.filter(function (k) { return k !== routeId; });
+                    return Promise.all(otherKeys.map(function (k) {
+                        return dbGetStore(STORE_ROUTES, k);
+                    }));
+                }).then(function (otherRoutes) {
+                    var protectedUrls = {};
+                    otherRoutes.forEach(function (r) {
+                        if (r && r.tileUrls) {
+                            r.tileUrls.forEach(function (url) { protectedUrls[url] = true; });
+                        }
+                    });
+                    var uniqueUrls = route.tileUrls.filter(function (url) {
+                        return !protectedUrls[url];
+                    });
+                    // Estimate bytes: total bytes * (unique/total) ratio
+                    var uniqueBytes = route.tileUrls.length > 0
+                        ? Math.round((route.tileBytes || 0) * uniqueUrls.length / route.tileUrls.length)
+                        : 0;
+                    return { route: route, uniqueUrls: uniqueUrls, uniqueBytes: uniqueBytes };
+                });
+            });
+        }
+
+        function executeRouteDelete(routeId, deleteTiles, uniqueUrls) {
+            var tilePromise = Promise.resolve();
+            if (deleteTiles && uniqueUrls.length > 0) {
+                tilePromise = caches.open('tiles-v1').then(function (cache) {
+                    return Promise.all(uniqueUrls.map(function (url) {
+                        return cache.delete(url);
+                    }));
+                }).then(function () {
+                    console.log('[Offline] Deleted ' + uniqueUrls.length + ' cached tiles');
+                });
+            }
+            return tilePromise.then(function () {
+                return dbDeleteStore(STORE_ROUTES, routeId);
+            }).then(function () {
                 refreshOfflineRouteList();
-                setRouteStatus('Route deleted.', 'info');
+                var msg = deleteTiles && uniqueUrls.length > 0
+                    ? 'Route and ' + uniqueUrls.length + ' cached tiles deleted.'
+                    : 'Route deleted (map tiles kept).';
+                setRouteStatus(msg, 'info');
+            });
+        }
+
+        function closeDeleteRouteDialog() {
+            document.getElementById('deleteRouteDialog').classList.remove('visible');
+        }
+        window.closeDeleteRouteDialog = closeDeleteRouteDialog;
+
+        function deleteOfflineRoute(routeId) {
+            findUniqueTiles(routeId).then(function (result) {
+                if (!result.route) {
+                    return dbDeleteStore(STORE_ROUTES, routeId).then(function () {
+                        refreshOfflineRouteList();
+                    });
+                }
+
+                // No unique tiles — just delete the route record
+                if (result.uniqueUrls.length === 0) {
+                    return executeRouteDelete(routeId, false, []);
+                }
+
+                // Has unique tiles — show confirmation dialog
+                var info = document.getElementById('deleteRouteInfo');
+                info.innerHTML = '<strong>' + result.route.name + '</strong> has ' +
+                    result.uniqueUrls.length + ' cached map tiles (~' +
+                    formatBytes(result.uniqueBytes) + ') that are not used by other routes.';
+
+                var dialog = document.getElementById('deleteRouteDialog');
+                dialog.classList.add('visible');
+
+                var btnBoth = document.getElementById('deleteRouteBoth');
+                var btnOnly = document.getElementById('deleteRouteOnly');
+
+                // Clone buttons to remove any prior listeners
+                var newBtnBoth = btnBoth.cloneNode(true);
+                var newBtnOnly = btnOnly.cloneNode(true);
+                btnBoth.parentNode.replaceChild(newBtnBoth, btnBoth);
+                btnOnly.parentNode.replaceChild(newBtnOnly, btnOnly);
+
+                newBtnBoth.addEventListener('click', function () {
+                    closeDeleteRouteDialog();
+                    executeRouteDelete(routeId, true, result.uniqueUrls);
+                });
+                newBtnOnly.addEventListener('click', function () {
+                    closeDeleteRouteDialog();
+                    executeRouteDelete(routeId, false, []);
+                });
             });
         }
         window.deleteOfflineRoute = deleteOfflineRoute;
