@@ -10,41 +10,38 @@
         body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
         #map { width: 100vw; height: 100vh; }
 
-        /* ---- Control Panel ---- */
+        /* ---- Control Panel (Wind & Waves) ---- */
         .control-panel {
             position: absolute;
-            top: 10px;
+            top: 80px;
             right: 10px;
             z-index: 1000;
             background: rgba(255, 255, 255, 0.95);
             border-radius: 10px;
-            padding: 16px 18px;
             box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-            min-width: 230px;
             backdrop-filter: blur(8px);
+            min-width: 230px;
+            overflow: hidden;
+            display: none;
         }
-        .control-panel h2 {
-            font-size: 15px;
-            margin-bottom: 0;
-            color: #1a1a2e;
-            letter-spacing: -0.3px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            user-select: none;
-            -webkit-user-select: none;
+        .control-panel.visible { display: block; }
+        .control-panel-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 14px; cursor: grab; user-select: none;
+            background: rgba(74, 144, 217, 0.08);
+            border-bottom: 1px solid rgba(74, 144, 217, 0.15);
         }
-        .control-panel h2:hover { opacity: 0.7; }
+        .control-panel-header:active { cursor: grabbing; }
+        .control-panel-header:hover { background: rgba(74, 144, 217, 0.14); }
+        .control-panel-header h3 {
+            font-size: 13px; font-weight: 600; color: #4a90d9; margin: 0;
+        }
         .control-panel-toggle {
-            font-size: 11px;
-            transition: transform 0.2s;
-            margin-left: 8px;
+            font-size: 14px; color: #4a90d9; transition: transform 0.3s;
         }
         .control-panel.collapsed .control-panel-toggle { transform: rotate(-90deg); }
+        .control-panel-body { padding: 12px 14px; }
         .control-panel.collapsed .control-panel-body { display: none; }
-        .control-panel:not(.collapsed) h2 { margin-bottom: 12px; }
-        .control-panel.collapsed { min-width: 0; }
         .control-group {
             margin-bottom: 10px;
             display: flex;
@@ -232,11 +229,13 @@
         }
 
         @media (max-width: 600px) {
-            .control-panel { right: 5px; top: 5px; min-width: 180px; padding: 12px; }
+            .control-panel { right: 5px; top: 60px; min-width: 180px; }
             .legend { bottom: 5px; left: 5px; padding: 10px; max-width: 170px; }
             .webcam-box { width: 96vw; }
             .webcam-body { min-height: 260px; }
             .webcam-body iframe { min-height: 260px; }
+            .floating-menu { top: 5px; left: 5px; gap: 4px; }
+            .fm-btn { width: 36px; height: 36px; }
         }
 
         /* AI Wave Estimate */
@@ -275,12 +274,36 @@
             color: #fff; padding: 1px 4px; border-radius: 3px; margin-right: 6px;
         }
 
+        /* ---- Floating Menu ---- */
+        .floating-menu {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1001;
+            display: flex;
+            gap: 6px;
+        }
+        .fm-btn {
+            width: 40px; height: 40px;
+            border: none; border-radius: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(8px);
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s, transform 0.1s;
+        }
+        .fm-btn:hover { background: rgba(240, 240, 240, 0.95); transform: scale(1.05); }
+        .fm-btn.active { background: rgba(74, 144, 217, 0.15); box-shadow: 0 2px 8px rgba(74, 144, 217, 0.3); }
+        .fm-btn svg { width: 20px; height: 20px; }
+
         /* ---- Route Planning Panel ---- */
         .route-panel {
             position: absolute;
             top: 80px;
             left: 10px;
             z-index: 1000;
+            display: none;
             background: rgba(255, 255, 255, 0.95);
             border-radius: 10px;
             box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
@@ -289,6 +312,7 @@
             overflow: hidden;
             transition: max-height 0.3s ease;
         }
+        .route-panel.visible { display: block; }
         .route-panel-header {
             display: flex; justify-content: space-between; align-items: center;
             padding: 10px 14px; cursor: grab; user-select: none;
@@ -392,8 +416,10 @@
             backdrop-filter: blur(8px);
             min-width: 200px;
             overflow: hidden;
+            display: none;
             transition: max-height 0.3s ease;
         }
+        .track-panel.visible { display: block; }
         .track-panel-header {
             display: flex; justify-content: space-between; align-items: center;
             padding: 10px 14px; cursor: grab; user-select: none;
@@ -491,6 +517,25 @@
 <body>
     <div id="map"></div>
 
+    <!-- Floating Menu -->
+    <div class="floating-menu" id="floatingMenu">
+        <button class="fm-btn" id="fmWeather" onclick="togglePanel('controlPanel')" title="Wind & Waves">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#4a90d9" stroke-width="2" stroke-linecap="round">
+                <path d="M9.59 4.59A2 2 0 1 1 11 8H2"/><path d="M12.59 19.41A2 2 0 1 0 14 16H2"/><path d="M17.73 7.73A2.5 2.5 0 1 1 19.5 12H2"/>
+            </svg>
+        </button>
+        <button class="fm-btn" id="fmRoute" onclick="togglePanel('routePanel')" title="Route Planning">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#0050cc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+            </svg>
+        </button>
+        <button class="fm-btn" id="fmTrack" onclick="togglePanel('trackPanel')" title="Tracking">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#2e7d32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+            </svg>
+        </button>
+    </div>
+
     <div class="sog-cog-display" id="sogCogDisplay">
         <div class="sog-cog-item">
             <span class="sog-cog-label">SOG</span>
@@ -504,8 +549,12 @@
         </div>
     </div>
 
-    <div class="control-panel collapsed" id="controlPanel">
-        <h2 onclick="document.getElementById('controlPanel').classList.toggle('collapsed')">Israel Coast Wind &amp; Waves <span class="control-panel-toggle">&#9660;</span></h2>
+    <div class="control-panel" id="controlPanel">
+        <div class="control-panel-header" id="controlPanelHeader">
+            <span class="route-panel-drag-hint">&#9776;</span>
+            <h3 style="flex:1">Wind &amp; Waves</h3>
+            <span class="control-panel-toggle">&#9660;</span>
+        </div>
         <div class="control-panel-body">
             <div class="control-group">
                 <label for="interval">Refresh every</label>
@@ -513,7 +562,7 @@
                 <span>min</span>
             </div>
             <button class="btn-refresh" id="refreshBtn" onclick="refreshData()">Refresh Now</button>
-            <button class="btn-refresh" id="pauseBtn" onclick="togglePause()" style="background:#78909c;margin-left:4px">Pause</button>
+            <button class="btn-refresh" id="pauseBtn" onclick="togglePause()" style="background:#78909c;margin-top:4px">Pause</button>
             <div class="status" id="status">Initializing...</div>
             <div class="countdown" id="countdown"></div>
             <div class="api-key-section" id="apiKeySection">
@@ -525,7 +574,7 @@
     </div>
 
     <!-- Route Planning Panel -->
-    <div class="route-panel collapsed" id="routePanel">
+    <div class="route-panel" id="routePanel">
         <div class="route-panel-header" id="routePanelHeader">
             <span class="route-panel-drag-hint">&#9776;</span>
             <h3 style="flex:1">Route Planning</h3>
@@ -578,7 +627,7 @@
     </div>
 
     <!-- Tracking Panel -->
-    <div class="track-panel collapsed" id="trackPanel">
+    <div class="track-panel" id="trackPanel">
         <div class="track-panel-header" id="trackPanelHeader">
             <span class="route-panel-drag-hint">&#9776;</span>
             <h3 style="flex:1">Tracking</h3>
@@ -594,6 +643,7 @@
             </div>
             <div class="track-buttons" style="margin-top:4px">
                 <button class="track-btn track-btn-clear" id="tClearBtn" onclick="clearTrack()" disabled>Clear</button>
+                <button class="track-btn" id="tExportBtn" onclick="exportTrackGPX()" disabled style="background:#5c6bc0;color:#fff">Export GPX</button>
             </div>
             <div class="route-field" style="margin-top:8px">
                 <label for="tLeadLine" style="min-width:0;font-size:11px;color:#555">Lead line</label>
@@ -604,7 +654,7 @@
         </div>
     </div>
 
-    <div class="legend">
+    <div class="legend" style="display:none">
         <h3>Wind Speed (knots)</h3>
         <div class="legend-item"><div class="legend-color" style="background:#3288bd"></div> 0 &ndash; 5 Calm</div>
         <div class="legend-item"><div class="legend-color" style="background:#66c2a5"></div> 5 &ndash; 10 Light</div>
@@ -786,7 +836,7 @@
         var boatLayer = L.layerGroup();
         var gpsLayer = L.layerGroup().addTo(map);
         var trackLayer = L.layerGroup().addTo(map);
-        var legendToggle = L.layerGroup().addTo(map); // dummy layer to toggle legend panel
+        var legendToggle = L.layerGroup(); // dummy layer to toggle legend panel (hidden by default)
 
         L.control.layers({
             'Standard Map': cartoLayer,
@@ -816,6 +866,94 @@
                 document.querySelector('.legend').style.display = 'none';
             }
         });
+
+        // ============================================================
+        // FLOATING MENU & PANEL TOGGLE
+        // ============================================================
+
+        var panelBtnMap = { controlPanel: 'fmWeather', routePanel: 'fmRoute', trackPanel: 'fmTrack' };
+
+        function togglePanel(panelId) {
+            var panel = document.getElementById(panelId);
+            var btn = document.getElementById(panelBtnMap[panelId]);
+            panel.classList.toggle('visible');
+            btn.classList.toggle('active');
+        }
+        window.togglePanel = togglePanel;
+
+        // ---- Control panel toggle (collapse/expand) ----
+        function toggleControlPanel() {
+            document.getElementById('controlPanel').classList.toggle('collapsed');
+        }
+        window.toggleControlPanel = toggleControlPanel;
+
+        // ---- Draggable control panel ----
+        (function () {
+            var panel = document.getElementById('controlPanel');
+            var header = document.getElementById('controlPanelHeader');
+            var dragStartX, dragStartY, panelStartX, panelStartY, dragged;
+
+            header.addEventListener('mousedown', function (e) {
+                if (e.button !== 0) return;
+                dragged = false;
+                dragStartX = e.clientX;
+                dragStartY = e.clientY;
+                var rect = panel.getBoundingClientRect();
+                panelStartX = rect.left;
+                panelStartY = rect.top;
+                document.addEventListener('mousemove', onDragMove);
+                document.addEventListener('mouseup', onDragEnd);
+                e.preventDefault();
+            });
+
+            function onDragMove(e) {
+                var dx = e.clientX - dragStartX;
+                var dy = e.clientY - dragStartY;
+                if (!dragged && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+                dragged = true;
+                panel.style.left = Math.max(0, panelStartX + dx) + 'px';
+                panel.style.top = Math.max(0, panelStartY + dy) + 'px';
+                panel.style.right = 'auto';
+            }
+
+            function onDragEnd() {
+                document.removeEventListener('mousemove', onDragMove);
+                document.removeEventListener('mouseup', onDragEnd);
+                if (!dragged) toggleControlPanel();
+            }
+
+            // Touch support
+            header.addEventListener('touchstart', function (e) {
+                if (e.touches.length !== 1) return;
+                dragged = false;
+                var t = e.touches[0];
+                dragStartX = t.clientX;
+                dragStartY = t.clientY;
+                var rect = panel.getBoundingClientRect();
+                panelStartX = rect.left;
+                panelStartY = rect.top;
+                document.addEventListener('touchmove', onTouchMove, { passive: false });
+                document.addEventListener('touchend', onTouchEnd);
+            });
+
+            function onTouchMove(e) {
+                var t = e.touches[0];
+                var dx = t.clientX - dragStartX;
+                var dy = t.clientY - dragStartY;
+                if (!dragged && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+                dragged = true;
+                e.preventDefault();
+                panel.style.left = Math.max(0, panelStartX + dx) + 'px';
+                panel.style.top = Math.max(0, panelStartY + dy) + 'px';
+                panel.style.right = 'auto';
+            }
+
+            function onTouchEnd() {
+                document.removeEventListener('touchmove', onTouchMove);
+                document.removeEventListener('touchend', onTouchEnd);
+                if (!dragged) toggleControlPanel();
+            }
+        })();
 
         // ============================================================
         // STATE
@@ -2705,6 +2843,7 @@
         var gpsPrevPos = null;       // { lat, lon, time }
         var gpsIsMoving = false;
         var gpsHeading = 0;
+        var gpsHasHeading = false;   // true once a heading has been computed
         var gpsSogKts = 0;
         var GPS_MOVE_THRESHOLD = 5;  // meters — below this considered stationary
         var gpsLeadLine = null;      // L.Polyline for leading line
@@ -2776,7 +2915,7 @@
 
         function updateLeadLine(lat, lon) {
             var nmVal = parseFloat(document.getElementById('tLeadLine').value) || 0;
-            if (nmVal > 0 && gpsIsMoving) {
+            if (nmVal > 0 && gpsHasHeading) {
                 var distM = nmVal * 1852; // nm to meters
                 var endPt = destinationPoint(lat, lon, gpsHeading, distM);
                 if (gpsLeadLine) {
@@ -2814,6 +2953,7 @@
                 var dtSec = (now - gpsPrevPos.time) / 1000;
                 if (dist > GPS_MOVE_THRESHOLD && dtSec > 0) {
                     gpsHeading = bearingDeg(gpsPrevPos.lat, gpsPrevPos.lon, lat, lon);
+                    gpsHasHeading = true;
                     gpsSogKts = (dist / dtSec) * 1.94384; // m/s to knots
                     moving = true;
                 } else {
@@ -3000,6 +3140,7 @@
             var stopBtn = document.getElementById('tStopBtn');
             var markBtn = document.getElementById('tMarkBtn');
             var clearBtn = document.getElementById('tClearBtn');
+            var exportBtn = document.getElementById('tExportBtn');
             var statusEl = document.getElementById('trackStatus');
 
             if (trackState.active) {
@@ -3008,6 +3149,7 @@
                 startBtn.disabled = true;
                 stopBtn.disabled = false;
                 markBtn.disabled = false;
+                exportBtn.disabled = trackState.positions.length < 2;
                 statusEl.className = 'track-status active';
                 statusEl.textContent = 'Tracking — ' + trackState.positions.length + ' points';
             } else {
@@ -3018,6 +3160,7 @@
                 markBtn.disabled = true;
                 var hasData = trackState.positions.length > 0 || trackState.pins.length > 0;
                 clearBtn.disabled = !hasData;
+                exportBtn.disabled = trackState.positions.length < 2;
                 statusEl.className = 'track-status';
                 statusEl.textContent = hasData
                     ? 'Stopped — ' + trackState.positions.length + ' points, ' + trackState.pins.length + ' pins'
@@ -3106,14 +3249,69 @@
         }
         window.clearTrack = clearTrack;
 
+        function exportTrackGPX() {
+            var pts = trackState.positions;
+            if (pts.length < 2) return;
+
+            var now = new Date().toISOString();
+            var trackName = 'Track ' + new Date().toLocaleDateString('en-GB') + ' ' +
+                new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+            var xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+                '<gpx version="1.1" creator="Israel Coast Weather App"\n' +
+                '  xmlns="http://www.topografix.com/GPX/1/1"\n' +
+                '  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n' +
+                '  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">\n' +
+                '  <metadata>\n' +
+                '    <name>' + escapeXml(trackName) + '</name>\n' +
+                '    <time>' + now + '</time>\n' +
+                '  </metadata>\n';
+
+            // Marked pins as waypoints
+            trackState.pins.forEach(function (pin, i) {
+                var ll = pin.getLatLng();
+                xml += '  <wpt lat="' + ll.lat.toFixed(7) + '" lon="' + ll.lng.toFixed(7) + '">\n' +
+                    '    <name>PIN' + (i + 1) + '</name>\n' +
+                    '  </wpt>\n';
+            });
+
+            // Track segment
+            xml += '  <trk>\n' +
+                '    <name>' + escapeXml(trackName) + '</name>\n' +
+                '    <trkseg>\n';
+            pts.forEach(function (pt) {
+                xml += '      <trkpt lat="' + pt[0].toFixed(7) + '" lon="' + pt[1].toFixed(7) + '"></trkpt>\n';
+            });
+            xml += '    </trkseg>\n' +
+                '  </trk>\n</gpx>\n';
+
+            var blob = new Blob([xml], { type: 'application/gpx+xml' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = trackName.replace(/[\/\\:*?"<>|]/g, '-') + '.gpx';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            var statusEl = document.getElementById('trackStatus');
+            statusEl.className = 'track-status';
+            statusEl.textContent = 'GPX file downloaded.';
+        }
+        window.exportTrackGPX = exportTrackGPX;
+
         // ============================================================
         // INIT
         // ============================================================
 
         initApiKeyUI();
         initBoat();
-        refreshData();
-        setupAutoRefresh();
+        refreshData();          // single pull on load
+        isPaused = true;         // start paused — no auto-refresh
+        document.getElementById('pauseBtn').textContent = 'Resume';
+        document.getElementById('pauseBtn').style.background = '#43a047';
+        document.getElementById('countdown').textContent = 'Auto-refresh paused';
 
     })();
     </script>
