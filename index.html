@@ -749,6 +749,10 @@
             <span class="track-panel-toggle">&#9660;</span>
         </div>
         <div class="track-panel-body">
+            <div class="route-field" style="margin-bottom:6px">
+                <label for="tTrackName" style="min-width:0;font-size:11px;color:#555">Name</label>
+                <input type="text" id="tTrackName" placeholder="Track name (optional)" style="flex:1;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px">
+            </div>
             <div class="track-buttons">
                 <button class="track-btn track-btn-start" id="tStartBtn" onclick="startTrack()">Start</button>
                 <button class="track-btn track-btn-stop" id="tStopBtn" onclick="stopTrack()" disabled>Stop</button>
@@ -3947,7 +3951,7 @@
 
         function updateLeadLine(lat, lon) {
             var nmVal = parseFloat(document.getElementById('tLeadLine').value) || 0;
-            if (nmVal > 0 && gpsHasHeading) {
+            if (nmVal > 0) {
                 var distM = nmVal * 1852; // nm to meters
                 var endPt = destinationPoint(lat, lon, gpsHeading, distM);
                 if (gpsLeadLine) {
@@ -4317,8 +4321,10 @@
             if (pts.length < 2) return;
 
             var now = new Date().toISOString();
-            var trackName = 'Track ' + new Date().toLocaleDateString('en-GB') + ' ' +
-                new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            var userTrackName = (document.getElementById('tTrackName').value || '').trim();
+            var trackName = userTrackName ||
+                ('Track ' + new Date().toLocaleDateString('en-GB') + ' ' +
+                new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
 
             var xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
                 '<gpx version="1.1" creator="Israel Coast Weather App"\n' +
