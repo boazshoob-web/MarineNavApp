@@ -4045,6 +4045,86 @@
             pinCount: 0
         };
 
+        // ---- Wake Lock & Background Keepalive ----
+        var _wakeLockSentinel = null;
+        var _noSleepAudio = null;
+        var _noSleepAudioCtx = null;
+
+        function requestWakeLock() {
+            // Screen Wake Lock API — keeps screen on
+            if ('wakeLock' in navigator) {
+                navigator.wakeLock.request('screen').then(function (sentinel) {
+                    _wakeLockSentinel = sentinel;
+                    console.log('Wake lock acquired');
+                    sentinel.addEventListener('release', function () {
+                        console.log('Wake lock released');
+                        _wakeLockSentinel = null;
+                    });
+                }).catch(function (err) {
+                    console.warn('Wake lock failed:', err.message);
+                });
+            }
+
+            // NoSleep: silent audio to prevent background suspension
+            startNoSleepAudio();
+        }
+
+        function releaseWakeLock() {
+            if (_wakeLockSentinel) {
+                _wakeLockSentinel.release();
+                _wakeLockSentinel = null;
+            }
+            stopNoSleepAudio();
+        }
+
+        function startNoSleepAudio() {
+            if (_noSleepAudio) return; // already running
+            try {
+                var AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) return;
+                _noSleepAudioCtx = new AudioContext();
+                // Create a silent oscillator
+                var oscillator = _noSleepAudioCtx.createOscillator();
+                var gain = _noSleepAudioCtx.createGain();
+                gain.gain.value = 0.001; // near-silent
+                oscillator.connect(gain);
+                gain.connect(_noSleepAudioCtx.destination);
+                oscillator.start();
+                _noSleepAudio = oscillator;
+                console.log('NoSleep audio started');
+            } catch (e) {
+                console.warn('NoSleep audio failed:', e.message);
+            }
+        }
+
+        function stopNoSleepAudio() {
+            if (_noSleepAudio) {
+                try { _noSleepAudio.stop(); } catch (e) {}
+                _noSleepAudio = null;
+            }
+            if (_noSleepAudioCtx) {
+                try { _noSleepAudioCtx.close(); } catch (e) {}
+                _noSleepAudioCtx = null;
+            }
+        }
+
+        // Re-acquire wake lock when page becomes visible again (e.g., user switches back to app)
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible' && trackState.active && !_wakeLockSentinel) {
+                if ('wakeLock' in navigator) {
+                    navigator.wakeLock.request('screen').then(function (sentinel) {
+                        _wakeLockSentinel = sentinel;
+                        console.log('Wake lock re-acquired');
+                        sentinel.addEventListener('release', function () {
+                            _wakeLockSentinel = null;
+                        });
+                    }).catch(function (err) {
+                        console.warn('Wake lock re-acquire failed:', err.message);
+                    });
+                }
+            }
+        });
+
         function toggleTrackPanel() {
             document.getElementById('trackPanel').classList.toggle('collapsed');
         }
@@ -4094,6 +4174,7 @@
             if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
 
             trackState.active = true;
+            requestWakeLock();
             trackState.watchId = navigator.geolocation.watchPosition(
                 function (pos) {
                     var ll = [pos.coords.latitude, pos.coords.longitude];
@@ -4129,6 +4210,7 @@
                 trackState.watchId = null;
             }
             trackState.active = false;
+            releaseWakeLock();
             updateTrackButtons();
         }
         window.stopTrack = stopTrack;
