@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Israel Coast Wind, Waves &amp; Pressure</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4a90d9">
@@ -4221,6 +4221,13 @@
             if (trackState.active) return;
             if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
 
+            // Stop the regular GPS watcher to avoid dual-watcher interference
+            // (two watchers both updating gpsPrevPos causes SOG/COG to read 0)
+            if (gpsWatchId !== null) {
+                navigator.geolocation.clearWatch(gpsWatchId);
+                gpsWatchId = null;
+            }
+
             trackState.active = true;
             requestWakeLock();
             trackState.watchId = navigator.geolocation.watchPosition(
@@ -4260,6 +4267,11 @@
             trackState.active = false;
             releaseWakeLock();
             updateTrackButtons();
+
+            // Restart the regular GPS watcher so SOG/COG keeps updating
+            if (isMobileDevice()) {
+                startGpsTracking(false);
+            }
         }
         window.stopTrack = stopTrack;
 
@@ -4356,6 +4368,26 @@
         document.getElementById('pauseBtn').textContent = 'Resume';
         document.getElementById('pauseBtn').style.background = '#43a047';
         document.getElementById('countdown').textContent = 'Auto-refresh paused';
+
+        // iOS: reset viewport zoom after keyboard dismissal
+        (function () {
+            var isIos = /iP(hone|ad|od)/.test(navigator.userAgent);
+            if (isIos) {
+                document.addEventListener('focusout', function () {
+                    // Small delay lets iOS finish its keyboard dismiss animation
+                    setTimeout(function () {
+                        window.scrollTo(0, 0);
+                        // Force viewport reset via meta tag refresh
+                        var vp = document.querySelector('meta[name="viewport"]');
+                        if (vp) {
+                            var content = vp.getAttribute('content');
+                            vp.setAttribute('content', 'width=device-width');
+                            setTimeout(function () { vp.setAttribute('content', content); }, 50);
+                        }
+                    }, 100);
+                });
+            }
+        })();
 
         // iOS Safari install hint — show once, dismissible
         (function () {
