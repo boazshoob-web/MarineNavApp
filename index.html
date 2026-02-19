@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Israel Coast Wind, Waves &amp; Pressure</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4a90d9">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="IL Coast">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -367,6 +374,30 @@
         .route-btn-auto:hover:not(:disabled) { background: #00796b; }
         .route-btn-export { background: #5c6bc0; color: #fff; min-width: 100%; }
         .route-btn-export:hover:not(:disabled) { background: #3f51b5; }
+        .route-btn-save { background: #e65100; color: #fff; min-width: 100%; }
+        .route-btn-save:hover:not(:disabled) { background: #bf360c; }
+        .offline-routes { margin-top: 10px; border-top: 1px solid #e0e0e0; padding-top: 8px; }
+        .offline-routes h4 { font-size: 11px; color: #555; margin-bottom: 6px; }
+        .offline-route-item {
+            display: flex; align-items: center; gap: 6px;
+            padding: 5px 6px; margin-bottom: 3px;
+            background: #f5f5f5; border-radius: 4px; font-size: 10px;
+        }
+        .offline-route-item .route-name { flex: 1; color: #333; font-weight: 500; cursor: pointer; }
+        .offline-route-item .route-name:hover { color: #0066ff; text-decoration: underline; }
+        .offline-route-item .route-size { color: #999; font-size: 9px; white-space: nowrap; }
+        .offline-route-item .route-delete {
+            background: none; border: none; color: #c62828; cursor: pointer;
+            font-size: 13px; padding: 0 2px; line-height: 1;
+        }
+        .offline-route-item .route-delete:hover { color: #e53935; }
+        .save-progress { font-size: 10px; color: #555; margin-top: 4px; }
+        .save-progress .progress-bar {
+            height: 4px; background: #e0e0e0; border-radius: 2px; margin-top: 3px; overflow: hidden;
+        }
+        .save-progress .progress-fill {
+            height: 100%; background: #e65100; border-radius: 2px; transition: width 0.3s;
+        }
         .route-summary {
             margin-top: 8px; padding-top: 8px;
             border-top: 1px solid #e0e0e0;
@@ -460,6 +491,45 @@
         }
         .track-status.active { color: #43a047; }
         .track-pin-marker { background: none !important; border: none !important; }
+
+        /* Offline Map Download */
+        .offline-map-ctrl {
+            background: #fff; border-radius: 6px; box-shadow: 0 1px 5px rgba(0,0,0,0.25);
+            cursor: pointer; width: 34px; height: 34px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .offline-map-ctrl:hover { background: #f0f0f0; }
+        .offline-map-ctrl svg { width: 20px; height: 20px; }
+        .dl-area-dialog {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4); z-index: 10000;
+            align-items: center; justify-content: center;
+        }
+        .dl-area-dialog.visible { display: flex; }
+        .dl-area-box {
+            background: #fff; border-radius: 10px; padding: 20px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.2); max-width: 340px; width: 90%;
+        }
+        .dl-area-box h3 { font-size: 14px; color: #333; margin: 0 0 12px 0; }
+        .dl-area-box .dl-info { font-size: 11px; color: #666; margin-bottom: 12px; line-height: 1.5; }
+        .dl-area-box .dl-field { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .dl-area-box .dl-field label { font-size: 11px; color: #555; min-width: 80px; }
+        .dl-area-box .dl-field span { font-size: 11px; color: #888; }
+        .dl-area-box .dl-field input { width: 60px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; text-align: center; }
+        .dl-area-btns { display: flex; gap: 8px; margin-top: 14px; }
+        .dl-area-btns button {
+            flex: 1; padding: 8px 12px; border: none; border-radius: 6px;
+            font-size: 12px; font-weight: 600; cursor: pointer;
+        }
+        .dl-btn-download { background: #e65100; color: #fff; }
+        .dl-btn-download:hover { background: #bf360c; }
+        .dl-btn-download:disabled { opacity: 0.5; cursor: not-allowed; }
+        .dl-btn-cancel { background: #e0e0e0; color: #555; }
+        .dl-btn-cancel:hover { background: #ccc; }
+        .dl-progress { font-size: 10px; color: #555; margin-top: 10px; }
+        .dl-progress .progress-bar { height: 4px; background: #e0e0e0; border-radius: 2px; margin-top: 3px; overflow: hidden; }
+        .dl-progress .progress-fill { height: 100%; background: #e65100; border-radius: 2px; transition: width 0.3s; }
+        .dl-storage-info { font-size: 10px; color: #999; margin-top: 8px; }
 
         @media (max-width: 600px) {
             .route-panel { top: 60px; left: 5px; min-width: 180px; }
@@ -616,6 +686,11 @@
                 <button class="route-btn route-btn-auto" id="rAutoBtn" onclick="autoCorrectRoute()" disabled>Auto-Correct Route</button>
                 <button class="route-btn route-btn-hazards" id="rHazardsBtn" onclick="showRouteHazards()" disabled style="display:none">Show Hazards</button>
                 <button class="route-btn route-btn-export" id="rExportBtn" onclick="exportRouteGPX()" disabled>Export GPX</button>
+                <button class="route-btn route-btn-save" id="rSaveOfflineBtn" onclick="saveRouteOffline()" disabled>Save for Offline</button>
+            </div>
+            <div class="save-progress" id="saveProgress" style="display:none">
+                <span id="saveProgressText">Saving...</span>
+                <div class="progress-bar"><div class="progress-fill" id="saveProgressFill" style="width:0%"></div></div>
             </div>
             <div class="route-summary" id="routeSummary" style="display:none">
                 <div><strong>Distance:</strong> <span id="rTotalDist">0.0</span> nm</div>
@@ -623,6 +698,10 @@
                 <div><strong>Waypoints:</strong> <span id="rWpCount">0</span></div>
             </div>
             <div class="route-status" id="routeStatus"></div>
+            <div class="offline-routes" id="offlineRoutes" style="display:none">
+                <h4>Saved Offline Routes</h4>
+                <div id="offlineRouteList"></div>
+            </div>
         </div>
     </div>
 
@@ -704,6 +783,33 @@
                 <button class="webcam-close" onclick="closeWebcam()">&times;</button>
             </div>
             <div class="webcam-body" id="webcamBody"></div>
+        </div>
+    </div>
+
+    <!-- Download Map Area Dialog -->
+    <div class="dl-area-dialog" id="dlAreaDialog" onclick="if(event.target===this)closeDlAreaDialog()">
+        <div class="dl-area-box">
+            <h3>Download Map Area for Offline</h3>
+            <div class="dl-info">Downloads tiles for the current map view. Pan and zoom to the area you want, then click Download.</div>
+            <div class="dl-field">
+                <label>Zoom range</label>
+                <input type="number" id="dlZoomMin" value="8" min="1" max="18"> &ndash;
+                <input type="number" id="dlZoomMax" value="15" min="1" max="18">
+            </div>
+            <div class="dl-field">
+                <label>Est. tiles</label>
+                <span id="dlTileCount">--</span>
+                <span id="dlTileSize" style="margin-left:8px"></span>
+            </div>
+            <div class="dl-area-btns">
+                <button class="dl-btn-cancel" onclick="closeDlAreaDialog()">Cancel</button>
+                <button class="dl-btn-download" id="dlStartBtn" onclick="startAreaDownload()">Download</button>
+            </div>
+            <div class="dl-progress" id="dlProgress" style="display:none">
+                <span id="dlProgressText">Downloading...</span>
+                <div class="progress-bar"><div class="progress-fill" id="dlProgressFill" style="width:0%"></div></div>
+            </div>
+            <div class="dl-storage-info" id="dlStorageInfo"></div>
         </div>
     </div>
 
@@ -965,6 +1071,76 @@
         var countdownInterval = null;
         var latestMarineData = null;
         var latestStationData = null;
+
+        // ============================================================
+        // INDEXEDDB CACHE (offline weather data)
+        // ============================================================
+
+        var DB_NAME = 'ilcoast';
+        var DB_VERSION = 1;
+        var STORE_WEATHER = 'weather';
+        var STORE_ROUTES = 'routes';
+        var STORE_TILES = 'tiles';
+        var _db = null;
+
+        function openDB() {
+            if (_db) return Promise.resolve(_db);
+            return new Promise(function (resolve, reject) {
+                var req = indexedDB.open(DB_NAME, DB_VERSION);
+                req.onupgradeneeded = function (e) {
+                    var db = e.target.result;
+                    if (!db.objectStoreNames.contains(STORE_WEATHER)) {
+                        db.createObjectStore(STORE_WEATHER);
+                    }
+                    if (!db.objectStoreNames.contains(STORE_ROUTES)) {
+                        db.createObjectStore(STORE_ROUTES);
+                    }
+                    if (!db.objectStoreNames.contains(STORE_TILES)) {
+                        db.createObjectStore(STORE_TILES);
+                    }
+                };
+                req.onsuccess = function () { _db = req.result; resolve(_db); };
+                req.onerror = function () { reject(req.error); };
+            });
+        }
+
+        function dbPut(key, value) {
+            return openDB().then(function (db) {
+                return new Promise(function (resolve, reject) {
+                    var tx = db.transaction(STORE_WEATHER, 'readwrite');
+                    tx.objectStore(STORE_WEATHER).put(value, key);
+                    tx.oncomplete = function () { resolve(); };
+                    tx.onerror = function () { reject(tx.error); };
+                });
+            });
+        }
+
+        function dbGet(key) {
+            return openDB().then(function (db) {
+                return new Promise(function (resolve, reject) {
+                    var tx = db.transaction(STORE_WEATHER, 'readonly');
+                    var req = tx.objectStore(STORE_WEATHER).get(key);
+                    req.onsuccess = function () { resolve(req.result || null); };
+                    req.onerror = function () { reject(req.error); };
+                });
+            });
+        }
+
+        function cacheWeatherData(stationData, marineData, pressureGrid) {
+            var record = {
+                timestamp: Date.now(),
+                stationData: stationData,
+                marineData: marineData,
+                pressureGrid: pressureGrid
+            };
+            return dbPut('latest', record).catch(function (err) {
+                console.warn('[Cache] Failed to save weather data:', err);
+            });
+        }
+
+        function loadCachedWeather() {
+            return dbGet('latest').catch(function () { return null; });
+        }
 
         // Boat state
         var boatHeading = 0;      // degrees, 0 = north
@@ -1574,6 +1750,15 @@
         // REFRESH LOGIC
         // ============================================================
 
+        function formatTimeAgo(ms) {
+            var sec = Math.floor(ms / 1000);
+            if (sec < 60) return sec + 's ago';
+            var min = Math.floor(sec / 60);
+            if (min < 60) return min + 'm ago';
+            var hr = Math.floor(min / 60);
+            return hr + 'h ' + (min % 60) + 'm ago';
+        }
+
         function refreshData() {
             if (isLoading) return;
             isLoading = true;
@@ -1616,6 +1801,11 @@
                     var intervalMin = parseInt(document.getElementById('interval').value) || 5;
                     nextRefreshTime = Date.now() + intervalMin * 60 * 1000;
 
+                    // Cache data to IndexedDB for offline use
+                    if (stationData || marineData || pressureGrid) {
+                        cacheWeatherData(stationData, marineData, pressureGrid);
+                    }
+
                     if (warnings.length === 0) {
                         statusEl.className = 'status ok';
                         statusEl.textContent = 'Updated: ' + new Date().toLocaleTimeString();
@@ -1624,9 +1814,20 @@
                         statusEl.textContent = 'Updated: ' + new Date().toLocaleTimeString() +
                             ' (' + warnings.join(', ') + ' data unavailable)';
                     } else {
-                        statusEl.className = 'status error';
-                        statusEl.textContent = 'Data unavailable — server rate limit. Try again shortly.';
-                        alert('Weather data is not available at this time.\nThe server is rate-limiting requests. Please try again in a few minutes.');
+                        // All three fetches failed — try loading from cache
+                        return loadCachedWeather().then(function (cached) {
+                            if (cached && cached.stationData) {
+                                var age = formatTimeAgo(Date.now() - cached.timestamp);
+                                if (cached.stationData) displayStationData(cached.stationData, cached.marineData || []);
+                                if (cached.pressureGrid) displayIsobars(cached.pressureGrid);
+                                updateBoatPopup();
+                                statusEl.className = 'status ok';
+                                statusEl.textContent = 'Offline — showing cached data (' + age + ')';
+                            } else {
+                                statusEl.className = 'status error';
+                                statusEl.textContent = 'Offline — no cached data available';
+                            }
+                        });
                     }
 
                     // Trigger first AI estimate after initial data load
@@ -2174,6 +2375,7 @@
             if (routeState.waypoints.length >= 2) {
                 document.getElementById('rAutoBtn').disabled = false;
                 document.getElementById('rExportBtn').disabled = false;
+                document.getElementById('rSaveOfflineBtn').disabled = false;
             }
         }
 
@@ -2233,6 +2435,7 @@
             if (routeState.waypoints.length >= 2) {
                 document.getElementById('rAutoBtn').disabled = false;
                 document.getElementById('rExportBtn').disabled = false;
+                document.getElementById('rSaveOfflineBtn').disabled = false;
                 setRouteStatus('Route drawn: ' + routeState.waypoints.length + ' waypoints.', 'ok');
             } else {
                 setRouteStatus('Need at least 2 waypoints.', 'error');
@@ -2266,6 +2469,7 @@
             document.getElementById('rClearBtn').disabled = true;
             document.getElementById('rAutoBtn').disabled = true;
             document.getElementById('rExportBtn').disabled = true;
+            document.getElementById('rSaveOfflineBtn').disabled = true;
             var hazBtn = document.getElementById('rHazardsBtn');
             hazBtn.style.display = 'none';
             hazBtn.disabled = true;
@@ -2608,6 +2812,478 @@
         }
 
         window.exportRouteGPX = exportRouteGPX;
+
+        // ============================================================
+        // SAVE ROUTE FOR OFFLINE
+        // ============================================================
+
+        var OFFLINE_TILE_ZOOM_MIN = 8;
+        var OFFLINE_TILE_ZOOM_MAX = 15;
+        var OFFLINE_MARGIN_DEG = 0.08;  // ~5 NM margin around route bbox
+
+        function setSaveProgress(text, pct) {
+            var el = document.getElementById('saveProgress');
+            el.style.display = 'block';
+            document.getElementById('saveProgressText').textContent = text;
+            document.getElementById('saveProgressFill').style.width = pct + '%';
+        }
+
+        function hideSaveProgress() {
+            document.getElementById('saveProgress').style.display = 'none';
+        }
+
+        function getRouteBounds(waypoints, margin) {
+            var minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
+            waypoints.forEach(function (wp) {
+                if (wp.lat < minLat) minLat = wp.lat;
+                if (wp.lat > maxLat) maxLat = wp.lat;
+                if (wp.lng < minLon) minLon = wp.lng;
+                if (wp.lng > maxLon) maxLon = wp.lng;
+            });
+            return {
+                minLat: minLat - margin,
+                maxLat: maxLat + margin,
+                minLon: minLon - margin,
+                maxLon: maxLon + margin
+            };
+        }
+
+        function getTileCoords(bounds, zoom) {
+            var tiles = [];
+            var n = Math.pow(2, zoom);
+            var xMin = Math.floor((bounds.minLon + 180) / 360 * n);
+            var xMax = Math.floor((bounds.maxLon + 180) / 360 * n);
+            var yMin = Math.floor((1 - Math.log(Math.tan(bounds.maxLat * Math.PI / 180) + 1 / Math.cos(bounds.maxLat * Math.PI / 180)) / Math.PI) / 2 * n);
+            var yMax = Math.floor((1 - Math.log(Math.tan(bounds.minLat * Math.PI / 180) + 1 / Math.cos(bounds.minLat * Math.PI / 180)) / Math.PI) / 2 * n);
+            for (var x = xMin; x <= xMax; x++) {
+                for (var y = yMin; y <= yMax; y++) {
+                    tiles.push({ z: zoom, x: x, y: y });
+                }
+            }
+            return tiles;
+        }
+
+        function tileUrl(z, x, y) {
+            var sub = ['a', 'b', 'c', 'd'][Math.abs(x + y) % 4];
+            return 'https://' + sub + '.basemaps.cartocdn.com/light_all/' + z + '/' + x + '/' + y + '.png';
+        }
+
+        function downloadTilesForRoute(waypoints, onProgress) {
+            // Fetching tiles triggers the Service Worker's cache-first strategy,
+            // which stores them in the Cache API for offline access.
+            var bounds = getRouteBounds(waypoints, OFFLINE_MARGIN_DEG);
+            var allTiles = [];
+            for (var z = OFFLINE_TILE_ZOOM_MIN; z <= OFFLINE_TILE_ZOOM_MAX; z++) {
+                allTiles = allTiles.concat(getTileCoords(bounds, z));
+            }
+
+            var total = allTiles.length;
+            var done = 0;
+            var savedBytes = 0;
+            var BATCH = 6;  // concurrent fetches
+
+            function processBatch(idx) {
+                if (idx >= total) return Promise.resolve(savedBytes);
+                var batch = allTiles.slice(idx, idx + BATCH);
+                return Promise.all(batch.map(function (t) {
+                    var url = tileUrl(t.z, t.x, t.y);
+                    return fetch(url).then(function (r) {
+                        if (!r.ok) return 0;
+                        return r.blob().then(function (blob) {
+                            savedBytes += blob.size;
+                            return blob.size;
+                        });
+                    }).catch(function () { return 0; });
+                })).then(function () {
+                    done += batch.length;
+                    if (onProgress) onProgress(done, total, savedBytes);
+                    return processBatch(idx + BATCH);
+                });
+            }
+
+            return processBatch(0);
+        }
+
+        function fetchDepthProfilesForRoute(waypoints) {
+            var profiles = [];
+            var promises = [];
+            for (var i = 0; i < waypoints.length - 1; i++) {
+                (function (idx) {
+                    var segment = [waypoints[idx], waypoints[idx + 1]];
+                    promises.push(
+                        fetchDepthProfile(segment).then(function (depths) {
+                            profiles[idx] = depths;
+                        }).catch(function () {
+                            profiles[idx] = null;
+                        })
+                    );
+                })(i);
+            }
+            return Promise.all(promises).then(function () { return profiles; });
+        }
+
+        function getWeatherSnapshotForRoute(waypoints) {
+            var bounds = getRouteBounds(waypoints, OFFLINE_MARGIN_DEG);
+            var nearbyStations = STATIONS.filter(function (s) {
+                return s.lat >= bounds.minLat && s.lat <= bounds.maxLat &&
+                       s.lon >= bounds.minLon && s.lon <= bounds.maxLon;
+            });
+            var snapshot = { timestamp: Date.now(), stations: [] };
+            nearbyStations.forEach(function (s, i) {
+                var idx = STATIONS.indexOf(s);
+                var station = { name: s.name, lat: s.lat, lon: s.lon };
+                if (latestStationData && latestStationData[idx]) {
+                    station.wind = latestStationData[idx].current;
+                }
+                if (latestMarineData && latestMarineData[idx]) {
+                    station.marine = latestMarineData[idx].current;
+                }
+                snapshot.stations.push(station);
+            });
+            return snapshot;
+        }
+
+        // Generic IndexedDB put for any store
+        function dbPutStore(storeName, key, value) {
+            return openDB().then(function (db) {
+                return new Promise(function (resolve, reject) {
+                    var tx = db.transaction(storeName, 'readwrite');
+                    tx.objectStore(storeName).put(value, key);
+                    tx.oncomplete = function () { resolve(); };
+                    tx.onerror = function () { reject(tx.error); };
+                });
+            });
+        }
+
+        function dbGetStore(storeName, key) {
+            return openDB().then(function (db) {
+                return new Promise(function (resolve, reject) {
+                    var tx = db.transaction(storeName, 'readonly');
+                    var req = tx.objectStore(storeName).get(key);
+                    req.onsuccess = function () { resolve(req.result || null); };
+                    req.onerror = function () { reject(req.error); };
+                });
+            });
+        }
+
+        function dbDeleteStore(storeName, key) {
+            return openDB().then(function (db) {
+                return new Promise(function (resolve, reject) {
+                    var tx = db.transaction(storeName, 'readwrite');
+                    tx.objectStore(storeName).delete(key);
+                    tx.oncomplete = function () { resolve(); };
+                    tx.onerror = function () { reject(tx.error); };
+                });
+            });
+        }
+
+        function dbGetAllKeys(storeName) {
+            return openDB().then(function (db) {
+                return new Promise(function (resolve, reject) {
+                    var tx = db.transaction(storeName, 'readonly');
+                    var req = tx.objectStore(storeName).getAllKeys();
+                    req.onsuccess = function () { resolve(req.result || []); };
+                    req.onerror = function () { reject(req.error); };
+                });
+            });
+        }
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+
+        function saveRouteOffline() {
+            if (routeState.waypoints.length < 2) return;
+
+            var btn = document.getElementById('rSaveOfflineBtn');
+            btn.disabled = true;
+            var now = new Date();
+            var routeId = 'route_' + now.getTime();
+            var routeName = 'Route ' + now.toLocaleDateString('en-GB') + ' ' +
+                now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+            var wpData = routeState.waypoints.map(function (ll) {
+                return { lat: ll.lat, lng: ll.lng };
+            });
+            var params = getRouteParams();
+            var totalTileBytes = 0;
+
+            setSaveProgress('Fetching depth profiles...', 5);
+
+            // Step 1: Fetch depth profiles for all segments
+            fetchDepthProfilesForRoute(routeState.waypoints)
+                .then(function (depthProfiles) {
+                    setSaveProgress('Downloading map tiles...', 15);
+
+                    // Step 2: Download map tiles for route corridor
+                    return downloadTilesForRoute(wpData, function (done, total, bytes) {
+                        totalTileBytes = bytes;
+                        var pct = 15 + Math.floor((done / total) * 70);
+                        setSaveProgress('Downloading tiles: ' + done + '/' + total + ' (' + formatBytes(bytes) + ')', pct);
+                    }).then(function (bytes) {
+                        totalTileBytes = bytes;
+                        return depthProfiles;
+                    });
+                })
+                .then(function (depthProfiles) {
+                    setSaveProgress('Saving route data...', 90);
+
+                    // Step 3: Bundle everything and save
+                    var weather = getWeatherSnapshotForRoute(routeState.waypoints);
+                    var routeRecord = {
+                        id: routeId,
+                        name: routeName,
+                        timestamp: now.getTime(),
+                        waypoints: wpData,
+                        params: params,
+                        depthProfiles: depthProfiles,
+                        weather: weather,
+                        tileBytes: totalTileBytes,
+                        bounds: getRouteBounds(wpData, OFFLINE_MARGIN_DEG)
+                    };
+
+                    return dbPutStore(STORE_ROUTES, routeId, routeRecord);
+                })
+                .then(function () {
+                    setSaveProgress('Saved! (' + formatBytes(totalTileBytes) + ' tiles)', 100);
+                    setRouteStatus('Route saved for offline use.', 'ok');
+                    setTimeout(hideSaveProgress, 3000);
+                    btn.disabled = false;
+                    refreshOfflineRouteList();
+                })
+                .catch(function (err) {
+                    console.error('[Offline] Save failed:', err);
+                    setSaveProgress('Save failed: ' + err.message, 0);
+                    setRouteStatus('Failed to save route: ' + err.message, 'error');
+                    setTimeout(hideSaveProgress, 5000);
+                    btn.disabled = false;
+                });
+        }
+        window.saveRouteOffline = saveRouteOffline;
+
+        function loadOfflineRoute(routeId) {
+            dbGetStore(STORE_ROUTES, routeId).then(function (record) {
+                if (!record) {
+                    setRouteStatus('Route not found.', 'error');
+                    return;
+                }
+
+                // Clear current route
+                clearRoute();
+
+                // Restore vessel params
+                if (record.params) {
+                    document.getElementById('rVesselType').value = record.params.vesselType || 'motor';
+                    document.getElementById('rLOA').value = record.params.loa || 10;
+                    document.getElementById('rBeam').value = record.params.beam || 3;
+                    document.getElementById('rDraft').value = record.params.draft || 1.5;
+                    document.getElementById('rSafety').value = record.params.safety || 2;
+                    document.getElementById('rSpeed').value = record.params.speed || 6;
+                }
+
+                // Rebuild route from saved waypoints
+                var waypoints = record.waypoints.map(function (wp) {
+                    return L.latLng(wp.lat, wp.lng);
+                });
+
+                rebuildRoute(waypoints);
+                if (!map.hasLayer(routeLayer)) map.addLayer(routeLayer);
+
+                // Enable buttons
+                document.getElementById('rClearBtn').disabled = false;
+                document.getElementById('rAutoBtn').disabled = false;
+                document.getElementById('rExportBtn').disabled = false;
+                document.getElementById('rSaveOfflineBtn').disabled = false;
+
+                // Fit map to route
+                var bounds = getRouteBounds(record.waypoints, 0.02);
+                map.fitBounds([
+                    [bounds.minLat, bounds.minLon],
+                    [bounds.maxLat, bounds.maxLon]
+                ]);
+
+                var age = formatTimeAgo(Date.now() - record.timestamp);
+                setRouteStatus('Loaded offline route: ' + record.name + ' (saved ' + age + ')', 'ok');
+            });
+        }
+        window.loadOfflineRoute = loadOfflineRoute;
+
+        function deleteOfflineRoute(routeId) {
+            dbDeleteStore(STORE_ROUTES, routeId).then(function () {
+                refreshOfflineRouteList();
+                setRouteStatus('Route deleted.', 'info');
+            });
+        }
+        window.deleteOfflineRoute = deleteOfflineRoute;
+
+        function refreshOfflineRouteList() {
+            var container = document.getElementById('offlineRoutes');
+            var list = document.getElementById('offlineRouteList');
+
+            dbGetAllKeys(STORE_ROUTES).then(function (keys) {
+                if (keys.length === 0) {
+                    container.style.display = 'none';
+                    return;
+                }
+                container.style.display = 'block';
+
+                // Fetch all route records
+                return Promise.all(keys.map(function (key) {
+                    return dbGetStore(STORE_ROUTES, key);
+                })).then(function (routes) {
+                    routes.sort(function (a, b) { return b.timestamp - a.timestamp; });
+                    list.innerHTML = '';
+                    routes.forEach(function (r) {
+                        if (!r) return;
+                        var item = document.createElement('div');
+                        item.className = 'offline-route-item';
+                        var age = formatTimeAgo(Date.now() - r.timestamp);
+                        item.innerHTML =
+                            '<span class="route-name" onclick="loadOfflineRoute(\'' + r.id + '\')" title="Click to load">' +
+                            r.name + '</span>' +
+                            '<span class="route-size">' + formatBytes(r.tileBytes || 0) + ' &middot; ' + age + '</span>' +
+                            '<button class="route-delete" onclick="deleteOfflineRoute(\'' + r.id + '\')" title="Delete">&times;</button>';
+                        list.appendChild(item);
+                    });
+                });
+            });
+        }
+
+        // ============================================================
+        // DOWNLOAD MAP AREA FOR OFFLINE
+        // ============================================================
+
+        // Add download button as Leaflet control
+        var DownloadAreaControl = L.Control.extend({
+            options: { position: 'bottomleft' },
+            onAdd: function () {
+                var div = L.DomUtil.create('div', 'leaflet-bar offline-map-ctrl');
+                div.title = 'Download map area for offline use';
+                div.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#e65100" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                    '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>' +
+                    '<polyline points="7 10 12 15 17 10"/>' +
+                    '<line x1="12" y1="15" x2="12" y2="3"/></svg>';
+                L.DomEvent.disableClickPropagation(div);
+                div.addEventListener('click', function () { openDlAreaDialog(); });
+                return div;
+            }
+        });
+        map.addControl(new DownloadAreaControl());
+
+        function estimateTileCount(bounds, zMin, zMax) {
+            var total = 0;
+            for (var z = zMin; z <= zMax; z++) {
+                var tiles = getTileCoords(bounds, z);
+                total += tiles.length;
+            }
+            return total;
+        }
+
+        function updateDlEstimate() {
+            var mapBounds = map.getBounds();
+            var bounds = {
+                minLat: mapBounds.getSouth(),
+                maxLat: mapBounds.getNorth(),
+                minLon: mapBounds.getWest(),
+                maxLon: mapBounds.getEast()
+            };
+            var zMin = parseInt(document.getElementById('dlZoomMin').value) || 8;
+            var zMax = parseInt(document.getElementById('dlZoomMax').value) || 15;
+            if (zMin > zMax) { var t = zMin; zMin = zMax; zMax = t; }
+            var count = estimateTileCount(bounds, zMin, zMax);
+            var estMB = (count * 15 / 1024).toFixed(1);  // ~15KB avg per tile
+            document.getElementById('dlTileCount').textContent = count.toLocaleString() + ' tiles';
+            document.getElementById('dlTileSize').textContent = '(~' + estMB + ' MB)';
+        }
+
+        function openDlAreaDialog() {
+            document.getElementById('dlAreaDialog').classList.add('visible');
+            document.getElementById('dlProgress').style.display = 'none';
+            document.getElementById('dlStartBtn').disabled = false;
+            updateDlEstimate();
+            updateStorageInfo();
+        }
+        window.openDlAreaDialog = openDlAreaDialog;
+
+        function closeDlAreaDialog() {
+            document.getElementById('dlAreaDialog').classList.remove('visible');
+        }
+        window.closeDlAreaDialog = closeDlAreaDialog;
+
+        function updateStorageInfo() {
+            if (navigator.storage && navigator.storage.estimate) {
+                navigator.storage.estimate().then(function (est) {
+                    var used = formatBytes(est.usage || 0);
+                    var quota = formatBytes(est.quota || 0);
+                    document.getElementById('dlStorageInfo').textContent =
+                        'Storage used: ' + used + ' of ' + quota;
+                });
+            }
+        }
+
+        function startAreaDownload() {
+            var mapBounds = map.getBounds();
+            var bounds = {
+                minLat: mapBounds.getSouth(),
+                maxLat: mapBounds.getNorth(),
+                minLon: mapBounds.getWest(),
+                maxLon: mapBounds.getEast()
+            };
+            var zMin = parseInt(document.getElementById('dlZoomMin').value) || 8;
+            var zMax = parseInt(document.getElementById('dlZoomMax').value) || 15;
+            if (zMin > zMax) { var t = zMin; zMin = zMax; zMax = t; }
+
+            var allTiles = [];
+            for (var z = zMin; z <= zMax; z++) {
+                allTiles = allTiles.concat(getTileCoords(bounds, z));
+            }
+
+            var total = allTiles.length;
+            var done = 0;
+            var savedBytes = 0;
+            var BATCH = 6;
+
+            document.getElementById('dlStartBtn').disabled = true;
+            var progressEl = document.getElementById('dlProgress');
+            progressEl.style.display = 'block';
+
+            function processBatch(idx) {
+                if (idx >= total) return Promise.resolve();
+                var batch = allTiles.slice(idx, idx + BATCH);
+                return Promise.all(batch.map(function (t) {
+                    var url = tileUrl(t.z, t.x, t.y);
+                    return fetch(url).then(function (r) {
+                        if (!r.ok) return;
+                        return r.blob().then(function (blob) { savedBytes += blob.size; });
+                    }).catch(function () {});
+                })).then(function () {
+                    done += batch.length;
+                    var pct = Math.floor((done / total) * 100);
+                    document.getElementById('dlProgressText').textContent =
+                        'Downloading: ' + done + '/' + total + ' (' + formatBytes(savedBytes) + ')';
+                    document.getElementById('dlProgressFill').style.width = pct + '%';
+                    return processBatch(idx + BATCH);
+                });
+            }
+
+            processBatch(0).then(function () {
+                document.getElementById('dlProgressText').textContent =
+                    'Done! ' + total + ' tiles (' + formatBytes(savedBytes) + ')';
+                document.getElementById('dlProgressFill').style.width = '100%';
+                document.getElementById('dlStartBtn').disabled = false;
+                updateStorageInfo();
+            }).catch(function (err) {
+                document.getElementById('dlProgressText').textContent = 'Error: ' + err.message;
+                document.getElementById('dlStartBtn').disabled = false;
+            });
+        }
+        window.startAreaDownload = startAreaDownload;
+
+        // Update estimate when zoom inputs change
+        document.getElementById('dlZoomMin').addEventListener('change', updateDlEstimate);
+        document.getElementById('dlZoomMax').addEventListener('change', updateDlEstimate);
 
         // ---- Danger-zone detection ----
 
@@ -3307,6 +3983,7 @@
 
         initApiKeyUI();
         initBoat();
+        refreshOfflineRouteList();
         refreshData();          // single pull on load
         isPaused = true;         // start paused — no auto-refresh
         document.getElementById('pauseBtn').textContent = 'Resume';
@@ -3314,6 +3991,26 @@
         document.getElementById('countdown').textContent = 'Auto-refresh paused';
 
     })();
+    </script>
+
+    <!-- Service Worker registration -->
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+            navigator.serviceWorker.register('./sw.js').then(function (reg) {
+                console.log('[SW] registered, scope:', reg.scope);
+            }).catch(function (err) {
+                console.warn('[SW] registration failed:', err);
+            });
+
+            // Request persistent storage so cached data isn't evicted
+            if (navigator.storage && navigator.storage.persist) {
+                navigator.storage.persist().then(function (granted) {
+                    console.log('[Storage] Persistent:', granted);
+                });
+            }
+        });
+    }
     </script>
 </body>
 </html>
