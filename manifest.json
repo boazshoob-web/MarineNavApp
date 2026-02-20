@@ -1,6 +1,6 @@
 {
-  "name": "Israel Coast Wind, Waves & Pressure",
-  "short_name": "IL Coast",
+  "name": "Marina Nav Assist",
+  "short_name": "MNA",
   "description": "Real-time wind, wave, and pressure conditions along the Israeli Mediterranean coastline",
   "start_url": "./index.html",
   "display": "standalone",

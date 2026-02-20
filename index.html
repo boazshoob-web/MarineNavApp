@@ -382,6 +382,15 @@
         .route-btn-export:hover:not(:disabled) { background: #3f51b5; }
         .route-btn-save { background: #e65100; color: #fff; }
         .route-btn-save:hover:not(:disabled) { background: #bf360c; }
+        .route-btn-save-route { background: #43a047; color: #fff; }
+        .route-btn-save-route:hover:not(:disabled) { background: #388e3c; }
+        .offline-indicator {
+            display: inline-block; width: 8px; height: 8px;
+            border-radius: 50%; margin-right: 4px; vertical-align: middle;
+            flex-shrink: 0;
+        }
+        .offline-indicator.has-tiles { background: #43a047; }
+        .offline-indicator.no-tiles { background: none; border: 1.5px solid #bbb; }
         .offline-routes { margin-top: 10px; border-top: 1px solid #e0e0e0; padding-top: 8px; }
         .offline-routes h4 { font-size: 11px; color: #555; margin-bottom: 6px; }
         .offline-route-item {
@@ -722,6 +731,7 @@
                 <button class="route-btn route-btn-auto" id="rAutoBtn" onclick="autoCorrectRoute()" disabled>Auto-Correct Route</button>
                 <button class="route-btn route-btn-hazards" id="rHazardsBtn" onclick="showRouteHazards()" disabled style="display:none">Show Hazards</button>
                 <button class="route-btn route-btn-export" id="rExportBtn" onclick="exportRouteGPX()" disabled>Export GPX</button>
+                <button class="route-btn route-btn-save-route" id="rSaveRouteBtn" onclick="saveRouteLight()" disabled>Save Route</button>
                 <button class="route-btn route-btn-save" id="rSaveOfflineBtn" onclick="saveRouteOffline()" disabled>Save for Offline</button>
             </div>
             <div class="save-progress" id="saveProgress" style="display:none">
@@ -735,7 +745,7 @@
             </div>
             <div class="route-status" id="routeStatus"></div>
             <div class="offline-routes" id="offlineRoutes" style="display:none">
-                <h4>Saved Offline Routes</h4>
+                <h4>Saved Routes</h4>
                 <div id="offlineRouteList"></div>
             </div>
         </div>
@@ -2400,6 +2410,8 @@
             hazardMarkers: []  // Array of L.CircleMarker (hazard indicators)
         };
 
+        var loadedRouteId = null;  // ID of currently loaded saved route (for upgrade flow)
+
         function toggleRoutePanel() {
             document.getElementById('routePanel').classList.toggle('collapsed');
         }
@@ -2574,6 +2586,7 @@
             if (routeState.waypoints.length >= 2) {
                 document.getElementById('rAutoBtn').disabled = false;
                 document.getElementById('rExportBtn').disabled = false;
+                document.getElementById('rSaveRouteBtn').disabled = false;
                 document.getElementById('rSaveOfflineBtn').disabled = false;
             }
         }
@@ -2634,6 +2647,7 @@
             if (routeState.waypoints.length >= 2) {
                 document.getElementById('rAutoBtn').disabled = false;
                 document.getElementById('rExportBtn').disabled = false;
+                document.getElementById('rSaveRouteBtn').disabled = false;
                 document.getElementById('rSaveOfflineBtn').disabled = false;
                 setRouteStatus('Route drawn: ' + routeState.waypoints.length + ' waypoints.', 'ok');
             } else {
@@ -2668,7 +2682,10 @@
             document.getElementById('rClearBtn').disabled = true;
             document.getElementById('rAutoBtn').disabled = true;
             document.getElementById('rExportBtn').disabled = true;
+            document.getElementById('rSaveRouteBtn').disabled = true;
             document.getElementById('rSaveOfflineBtn').disabled = true;
+            document.getElementById('rSaveOfflineBtn').textContent = 'Save for Offline';
+            loadedRouteId = null;
             var hazBtn = document.getElementById('rHazardsBtn');
             hazBtn.style.display = 'none';
             hazBtn.disabled = true;
@@ -3216,14 +3233,115 @@
         function saveRouteOffline() {
             if (routeState.waypoints.length < 2) return;
 
+            var btn = document.getElementById('rSaveOfflineBtn');
+            btn.disabled = true;
+
+            // Check if we should upgrade an existing route (saved without tiles)
+            var upgradePromise;
+            if (loadedRouteId) {
+                upgradePromise = dbGetStore(STORE_ROUTES, loadedRouteId).then(function (existing) {
+                    if (existing && !existing.hasTiles) return existing;
+                    return null;
+                });
+            } else {
+                upgradePromise = Promise.resolve(null);
+            }
+
+            upgradePromise.then(function (existingRecord) {
+                var now = new Date();
+                var routeId, routeName;
+
+                if (existingRecord) {
+                    routeId = existingRecord.id;
+                    routeName = existingRecord.name;
+                } else {
+                    var defaultName = 'Route ' + now.toLocaleDateString('en-GB') + ' ' +
+                        now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                    routeName = prompt('Name this route:', defaultName);
+                    if (!routeName) { btn.disabled = false; return; }
+                    routeName = routeName.trim() || defaultName;
+                    routeId = 'route_' + now.getTime();
+                }
+
+                var wpData = routeState.waypoints.map(function (ll) {
+                    return { lat: ll.lat, lng: ll.lng };
+                });
+                var params = getRouteParams();
+                var totalTileBytes = 0;
+                var tileUrls = [];
+
+                setSaveProgress('Fetching depth profiles...', 5);
+
+                fetchDepthProfilesForRoute(routeState.waypoints)
+                    .then(function (depthProfiles) {
+                        setSaveProgress('Downloading map tiles...', 15);
+
+                        return downloadTilesForRoute(wpData, function (done, total, bytes) {
+                            totalTileBytes = bytes;
+                            var pct = 15 + Math.floor((done / total) * 70);
+                            setSaveProgress('Downloading tiles: ' + done + '/' + total + ' (' + formatBytes(bytes) + ')', pct);
+                        }).then(function (result) {
+                            totalTileBytes = result.bytes;
+                            tileUrls = result.urls;
+                            return depthProfiles;
+                        });
+                    })
+                    .then(function (depthProfiles) {
+                        setSaveProgress('Saving route data...', 90);
+
+                        var weather = getWeatherSnapshotForRoute(routeState.waypoints);
+                        var routeRecord = {
+                            id: routeId,
+                            name: routeName,
+                            timestamp: existingRecord ? existingRecord.timestamp : now.getTime(),
+                            waypoints: wpData,
+                            params: params,
+                            depthProfiles: depthProfiles,
+                            weather: weather,
+                            hasTiles: true,
+                            tileBytes: totalTileBytes,
+                            tileUrls: tileUrls,
+                            bounds: getRouteBounds(wpData, OFFLINE_MARGIN_DEG)
+                        };
+
+                        return dbPutStore(STORE_ROUTES, routeId, routeRecord);
+                    })
+                    .then(function () {
+                        loadedRouteId = routeId;
+                        var msg = existingRecord
+                            ? 'Offline maps added! (' + formatBytes(totalTileBytes) + ')'
+                            : 'Saved! (' + formatBytes(totalTileBytes) + ' tiles)';
+                        setSaveProgress(msg, 100);
+                        setRouteStatus(existingRecord
+                            ? 'Route "' + routeName + '" now has offline map data.'
+                            : 'Route saved for offline use.', 'ok');
+                        btn.textContent = 'Save for Offline';
+                        setTimeout(hideSaveProgress, 3000);
+                        btn.disabled = false;
+                        refreshOfflineRouteList();
+                    })
+                    .catch(function (err) {
+                        console.error('[Offline] Save failed:', err);
+                        setSaveProgress('Save failed: ' + err.message, 0);
+                        setRouteStatus('Failed to save route: ' + err.message, 'error');
+                        setTimeout(hideSaveProgress, 5000);
+                        btn.disabled = false;
+                    });
+            });
+        }
+        window.saveRouteOffline = saveRouteOffline;
+
+        function saveRouteLight() {
+            if (routeState.waypoints.length < 2) return;
+
             var now = new Date();
             var defaultName = 'Route ' + now.toLocaleDateString('en-GB') + ' ' +
                 now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
             var routeName = prompt('Name this route:', defaultName);
-            if (!routeName) return;  // user cancelled
+            if (!routeName) return;
             routeName = routeName.trim() || defaultName;
 
-            var btn = document.getElementById('rSaveOfflineBtn');
+            var btn = document.getElementById('rSaveRouteBtn');
             btn.disabled = true;
             var routeId = 'route_' + now.getTime();
 
@@ -3231,31 +3349,13 @@
                 return { lat: ll.lat, lng: ll.lng };
             });
             var params = getRouteParams();
-            var totalTileBytes = 0;
-            var tileUrls = [];
 
-            setSaveProgress('Fetching depth profiles...', 5);
+            setSaveProgress('Fetching depth profiles...', 10);
 
-            // Step 1: Fetch depth profiles for all segments
             fetchDepthProfilesForRoute(routeState.waypoints)
                 .then(function (depthProfiles) {
-                    setSaveProgress('Downloading map tiles...', 15);
+                    setSaveProgress('Saving route...', 80);
 
-                    // Step 2: Download map tiles for route corridor
-                    return downloadTilesForRoute(wpData, function (done, total, bytes) {
-                        totalTileBytes = bytes;
-                        var pct = 15 + Math.floor((done / total) * 70);
-                        setSaveProgress('Downloading tiles: ' + done + '/' + total + ' (' + formatBytes(bytes) + ')', pct);
-                    }).then(function (result) {
-                        totalTileBytes = result.bytes;
-                        tileUrls = result.urls;
-                        return depthProfiles;
-                    });
-                })
-                .then(function (depthProfiles) {
-                    setSaveProgress('Saving route data...', 90);
-
-                    // Step 3: Bundle everything and save
                     var weather = getWeatherSnapshotForRoute(routeState.waypoints);
                     var routeRecord = {
                         id: routeId,
@@ -3265,29 +3365,32 @@
                         params: params,
                         depthProfiles: depthProfiles,
                         weather: weather,
-                        tileBytes: totalTileBytes,
-                        tileUrls: tileUrls,
+                        hasTiles: false,
+                        tileBytes: 0,
+                        tileUrls: [],
                         bounds: getRouteBounds(wpData, OFFLINE_MARGIN_DEG)
                     };
 
                     return dbPutStore(STORE_ROUTES, routeId, routeRecord);
                 })
                 .then(function () {
-                    setSaveProgress('Saved! (' + formatBytes(totalTileBytes) + ' tiles)', 100);
-                    setRouteStatus('Route saved for offline use.', 'ok');
-                    setTimeout(hideSaveProgress, 3000);
+                    loadedRouteId = routeId;
+                    setSaveProgress('Route saved!', 100);
+                    setRouteStatus('Route saved: ' + routeName, 'ok');
+                    document.getElementById('rSaveOfflineBtn').textContent = 'Add Offline Maps';
+                    setTimeout(hideSaveProgress, 2000);
                     btn.disabled = false;
                     refreshOfflineRouteList();
                 })
                 .catch(function (err) {
-                    console.error('[Offline] Save failed:', err);
+                    console.error('[SaveRoute] Save failed:', err);
                     setSaveProgress('Save failed: ' + err.message, 0);
                     setRouteStatus('Failed to save route: ' + err.message, 'error');
                     setTimeout(hideSaveProgress, 5000);
                     btn.disabled = false;
                 });
         }
-        window.saveRouteOffline = saveRouteOffline;
+        window.saveRouteLight = saveRouteLight;
 
         function loadOfflineRoute(routeId) {
             dbGetStore(STORE_ROUTES, routeId).then(function (record) {
@@ -3298,6 +3401,7 @@
 
                 // Clear current route
                 clearRoute();
+                loadedRouteId = routeId;
 
                 // Restore vessel params
                 if (record.params) {
@@ -3321,7 +3425,13 @@
                 document.getElementById('rClearBtn').disabled = false;
                 document.getElementById('rAutoBtn').disabled = false;
                 document.getElementById('rExportBtn').disabled = false;
+                document.getElementById('rSaveRouteBtn').disabled = false;
                 document.getElementById('rSaveOfflineBtn').disabled = false;
+
+                // Update Save for Offline button text based on tile status
+                var hasTiles = record.hasTiles !== undefined ? record.hasTiles : true;
+                document.getElementById('rSaveOfflineBtn').textContent =
+                    hasTiles ? 'Save for Offline' : 'Add Offline Maps';
 
                 // Fit map to route
                 var bounds = getRouteBounds(record.waypoints, 0.02);
@@ -3331,7 +3441,7 @@
                 ]);
 
                 var age = formatTimeAgo(Date.now() - record.timestamp);
-                setRouteStatus('Loaded offline route: ' + record.name + ' (saved ' + age + ')', 'ok');
+                setRouteStatus('Loaded route: ' + record.name + ' (saved ' + age + ')', 'ok');
             });
         }
         window.loadOfflineRoute = loadOfflineRoute;
@@ -3379,6 +3489,10 @@
             return tilePromise.then(function () {
                 return dbDeleteStore(STORE_ROUTES, routeId);
             }).then(function () {
+                if (routeId === loadedRouteId) {
+                    loadedRouteId = null;
+                    document.getElementById('rSaveOfflineBtn').textContent = 'Save for Offline';
+                }
                 refreshOfflineRouteList();
                 var msg = deleteTiles && uniqueUrls.length > 0
                     ? 'Route and ' + uniqueUrls.length + ' cached tiles deleted.'
@@ -3400,8 +3514,9 @@
                     });
                 }
 
-                // No unique tiles — just delete the route record
+                // No unique tiles — confirm then delete the route record
                 if (result.uniqueUrls.length === 0) {
+                    if (!confirm('Delete route "' + result.route.name + '"?')) return;
                     return executeRouteDelete(routeId, false, []);
                 }
 
@@ -3457,10 +3572,15 @@
                         var item = document.createElement('div');
                         item.className = 'offline-route-item';
                         var age = formatTimeAgo(Date.now() - r.timestamp);
+                        var hasTiles = r.hasTiles !== undefined ? r.hasTiles : true;
+                        var indicatorClass = hasTiles ? 'has-tiles' : 'no-tiles';
+                        var indicatorTitle = hasTiles ? 'Has offline maps' : 'Route only (no offline maps)';
+                        var sizeText = hasTiles ? formatBytes(r.tileBytes || 0) : 'no maps';
                         item.innerHTML =
+                            '<span class="offline-indicator ' + indicatorClass + '" title="' + indicatorTitle + '"></span>' +
                             '<span class="route-name" onclick="loadOfflineRoute(\'' + r.id + '\')" title="Click to load">' +
                             r.name + '</span>' +
-                            '<span class="route-size">' + formatBytes(r.tileBytes || 0) + ' &middot; ' + age + '</span>' +
+                            '<span class="route-size">' + sizeText + ' &middot; ' + age + '</span>' +
                             '<button class="route-delete" onclick="deleteOfflineRoute(\'' + r.id + '\')" title="Delete">&times;</button>';
                         list.appendChild(item);
                     });
