@@ -826,6 +826,9 @@
                 <button class="track-btn track-btn-clear" id="tClearBtn" onclick="clearTrack()" disabled>Clear</button>
                 <button class="track-btn" id="tExportBtn" onclick="exportTrackGPX()" disabled style="background:#5c6bc0;color:#fff">Export GPX</button>
             </div>
+            <div class="track-buttons" style="margin-top:4px">
+                <button class="track-btn" id="tSaveRouteBtn" onclick="saveTrackAsRoute()" disabled style="background:#e65100;color:#fff;min-width:100%">Save as Route</button>
+            </div>
             <div class="route-field" style="margin-top:8px">
                 <label for="tLeadLine" style="min-width:0;font-size:11px;color:#555">Lead line</label>
                 <input type="number" id="tLeadLine" value="200" min="0" max="500" step="0.5" style="flex:1;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px;max-width:60px">
@@ -4390,6 +4393,7 @@
             var markBtn = document.getElementById('tMarkBtn');
             var clearBtn = document.getElementById('tClearBtn');
             var exportBtn = document.getElementById('tExportBtn');
+            var saveRouteBtn = document.getElementById('tSaveRouteBtn');
             var statusEl = document.getElementById('trackStatus');
 
             if (trackState.active) {
@@ -4399,6 +4403,7 @@
                 stopBtn.disabled = false;
                 markBtn.disabled = false;
                 exportBtn.disabled = trackState.positions.length < 2;
+                saveRouteBtn.disabled = true;
                 statusEl.className = 'track-status active';
                 statusEl.textContent = 'Tracking — ' + trackState.positions.length + ' points';
             } else {
@@ -4410,6 +4415,7 @@
                 var hasData = trackState.positions.length > 0 || trackState.pins.length > 0;
                 clearBtn.disabled = !hasData;
                 exportBtn.disabled = trackState.positions.length < 2;
+                saveRouteBtn.disabled = trackState.positions.length < 2;
                 statusEl.className = 'track-status';
                 statusEl.textContent = hasData
                     ? 'Stopped — ' + trackState.positions.length + ' points, ' + trackState.pins.length + ' pins'
@@ -4557,6 +4563,107 @@
             statusEl.textContent = 'GPX file exported.';
         }
         window.exportTrackGPX = exportTrackGPX;
+
+        // ---- Ramer-Douglas-Peucker track simplification ----
+        // Returns perpendicular distance (meters) from point P to line segment A-B
+        function perpendicularDist(p, a, b) {
+            var dAB = distanceMeters(a[0], a[1], b[0], b[1]);
+            if (dAB === 0) return distanceMeters(p[0], p[1], a[0], a[1]);
+            // Cross-track distance using spherical approximation
+            var bearAB = bearingDeg(a[0], a[1], b[0], b[1]) * Math.PI / 180;
+            var bearAP = bearingDeg(a[0], a[1], p[0], p[1]) * Math.PI / 180;
+            var dAP = distanceMeters(a[0], a[1], p[0], p[1]);
+            var crossTrack = Math.abs(Math.asin(Math.sin(dAP / 6371000) * Math.sin(bearAP - bearAB)) * 6371000);
+            // Also check along-track distance to handle points beyond segment endpoints
+            var alongTrack = Math.acos(Math.cos(dAP / 6371000) / Math.cos(crossTrack / 6371000)) * 6371000;
+            if (alongTrack > dAB) return distanceMeters(p[0], p[1], b[0], b[1]);
+            if (alongTrack < 0) return distanceMeters(p[0], p[1], a[0], a[1]);
+            return crossTrack;
+        }
+
+        function simplifyTrack(positions, epsilon) {
+            if (positions.length <= 2) return positions.slice();
+            // Find the point with maximum distance from line(first, last)
+            var first = positions[0];
+            var last = positions[positions.length - 1];
+            var maxDist = 0, maxIdx = 0;
+            for (var i = 1; i < positions.length - 1; i++) {
+                var d = perpendicularDist(positions[i], first, last);
+                if (d > maxDist) { maxDist = d; maxIdx = i; }
+            }
+            if (maxDist > epsilon) {
+                var left = simplifyTrack(positions.slice(0, maxIdx + 1), epsilon);
+                var right = simplifyTrack(positions.slice(maxIdx), epsilon);
+                return left.slice(0, -1).concat(right);
+            }
+            return [first, last];
+        }
+
+        // ---- Save track as route (light save) ----
+        function saveTrackAsRoute() {
+            var pts = trackState.positions;
+            if (pts.length < 2) return;
+
+            var now = new Date();
+            var userTrackName = (document.getElementById('tTrackName').value || '').trim();
+            var defaultName = 'Track ' + now.toLocaleDateString('en-GB') + ' ' +
+                now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            var routeName = prompt('Name this route:', userTrackName || defaultName);
+            if (!routeName) return;
+            routeName = routeName.trim() || defaultName;
+
+            var btn = document.getElementById('tSaveRouteBtn');
+            btn.disabled = true;
+            var statusEl = document.getElementById('trackStatus');
+
+            // Simplify track: 50m tolerance
+            var simplified = simplifyTrack(pts, 50);
+            statusEl.className = 'track-status';
+            statusEl.textContent = 'Simplified: ' + pts.length + ' → ' + simplified.length + ' points';
+
+            var wpData = simplified.map(function (p) { return { lat: p[0], lng: p[1] }; });
+            var wpLatLng = simplified.map(function (p) { return L.latLng(p[0], p[1]); });
+            var routeId = 'route_' + now.getTime();
+
+            setSaveProgress('Fetching depth profiles...', 10);
+
+            fetchDepthProfilesForRoute(wpLatLng)
+                .then(function (depthProfiles) {
+                    setSaveProgress('Saving route...', 80);
+                    var weather = getWeatherSnapshotForRoute(wpData);
+                    var routeRecord = {
+                        id: routeId,
+                        name: routeName,
+                        timestamp: now.getTime(),
+                        waypoints: wpData,
+                        params: getRouteParams(),
+                        depthProfiles: depthProfiles,
+                        weather: weather,
+                        hasTiles: false,
+                        tileBytes: 0,
+                        tileUrls: [],
+                        bounds: getRouteBounds(wpData, OFFLINE_MARGIN_DEG)
+                    };
+                    return dbPutStore(STORE_ROUTES, routeId, routeRecord);
+                })
+                .then(function () {
+                    setSaveProgress('Route saved!', 100);
+                    statusEl.className = 'track-status';
+                    statusEl.textContent = 'Saved as route: ' + routeName + ' (' + simplified.length + ' waypoints)';
+                    setTimeout(hideSaveProgress, 2000);
+                    btn.disabled = false;
+                    refreshOfflineRouteList();
+                })
+                .catch(function (err) {
+                    console.error('[SaveTrackAsRoute] Failed:', err);
+                    setSaveProgress('Save failed: ' + err.message, 0);
+                    statusEl.className = 'track-status';
+                    statusEl.textContent = 'Save failed: ' + err.message;
+                    setTimeout(hideSaveProgress, 5000);
+                    btn.disabled = false;
+                });
+        }
+        window.saveTrackAsRoute = saveTrackAsRoute;
 
         // ============================================================
         // ANCHOR WATCH
