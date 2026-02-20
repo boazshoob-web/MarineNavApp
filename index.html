@@ -507,6 +507,52 @@
         .track-status.active { color: #43a047; }
         .track-pin-marker { background: none !important; border: none !important; }
 
+        /* ---- Anchor Watch Panel ---- */
+        .anchor-panel {
+            position: absolute; top: 80px; right: 250px; z-index: 1000;
+            background: rgba(255, 255, 255, 0.95); border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+            -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+            min-width: 200px; overflow: hidden; display: none;
+            transition: max-height 0.3s ease;
+        }
+        .anchor-panel.visible { display: block; }
+        .anchor-panel-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 14px; cursor: grab; user-select: none;
+            background: rgba(230, 81, 0, 0.1);
+            border-bottom: 1px solid rgba(230, 81, 0, 0.2);
+        }
+        .anchor-panel-header:active { cursor: grabbing; }
+        .anchor-panel-header:hover { background: rgba(230, 81, 0, 0.18); }
+        .anchor-panel-header h3 { font-size: 13px; font-weight: 600; color: #e65100; margin: 0; }
+        .anchor-panel-toggle { font-size: 14px; color: #e65100; transition: transform 0.3s; }
+        .anchor-panel.collapsed .anchor-panel-toggle { transform: rotate(-90deg); }
+        .anchor-panel-body { padding: 12px 14px; }
+        .anchor-panel.collapsed .anchor-panel-body { display: none; }
+        .anchor-btn {
+            flex: 1; min-width: 80px; padding: 6px 8px;
+            border: none; border-radius: 5px;
+            font-size: 11px; font-weight: 600; cursor: pointer;
+            transition: background 0.2s, opacity 0.2s;
+        }
+        .anchor-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .anchor-btn-set { background: #e65100; color: #fff; }
+        .anchor-btn-set:hover:not(:disabled) { background: #bf360c; }
+        .anchor-btn-set.active { background: #43a047; }
+        .anchor-btn-set.active:hover { background: #388e3c; }
+        .anchor-btn-clear { background: #e0e0e0; color: #555; }
+        .anchor-btn-clear:hover:not(:disabled) { background: #ccc; }
+        .anchor-status { font-size: 10px; margin-top: 8px; line-height: 1.4; color: #888; }
+        .anchor-status.active { color: #43a047; }
+        .anchor-status.alarm { color: #e53935; font-weight: 600; }
+        .anchor-distance {
+            font-size: 18px; font-weight: 700; color: #333; text-align: center;
+            margin: 6px 0; padding: 4px; background: rgba(0,0,0,0.03); border-radius: 6px;
+        }
+        .anchor-distance.alarm { color: #e53935; background: rgba(229,57,53,0.08); }
+        .anchor-map-icon { background: none !important; border: none !important; }
+
         /* Offline Map Download */
         .offline-map-ctrl {
             background: #fff; border-radius: 6px; box-shadow: 0 1px 5px rgba(0,0,0,0.25);
@@ -549,6 +595,7 @@
         @media (max-width: 600px) {
             .route-panel { top: 60px; left: 5px; min-width: 180px; }
             .track-panel { top: 60px; left: auto; right: 5px; min-width: 170px; }
+            .anchor-panel { top: 60px; right: 5px; min-width: 170px; }
         }
 
         /* Boat marker */
@@ -645,6 +692,11 @@
         <button class="fm-btn" id="fmTrack" onclick="togglePanel('trackPanel')" title="Tracking">
             <svg viewBox="0 0 24 24" fill="none" stroke="#2e7d32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+            </svg>
+        </button>
+        <button class="fm-btn" id="fmAnchor" onclick="togglePanel('anchorPanel')" title="Anchor Watch">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#e65100" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="21"/><line x1="8" y1="21" x2="16" y2="21"/><path d="M5 15a7 7 0 0 0 14 0"/>
             </svg>
         </button>
     </div>
@@ -780,6 +832,29 @@
                 <span style="font-size:10px;color:#888">nm</span>
             </div>
             <div class="track-status" id="trackStatus">Stopped</div>
+        </div>
+    </div>
+
+    <!-- Anchor Watch Panel -->
+    <div class="anchor-panel" id="anchorPanel">
+        <div class="anchor-panel-header" id="anchorPanelHeader">
+            <span class="route-panel-drag-hint">&#9776;</span>
+            <h3 style="flex:1">Anchor Watch</h3>
+            <span class="anchor-panel-toggle">&#9660;</span>
+        </div>
+        <div class="anchor-panel-body">
+            <div class="route-field" style="margin-bottom:6px">
+                <label style="min-width:0;font-size:11px;color:#555">Radius</label>
+                <input type="number" id="anchorRadius" value="30" min="5" max="500" step="5"
+                    style="flex:1;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px;max-width:60px">
+                <span style="font-size:10px;color:#888">m</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px">
+                <button class="anchor-btn anchor-btn-set" id="anchorSetBtn" onclick="setAnchor()" disabled>Drop Anchor</button>
+                <button class="anchor-btn anchor-btn-clear" id="anchorClearBtn" onclick="clearAnchor()" disabled>Clear</button>
+            </div>
+            <div class="anchor-distance" id="anchorDistance" style="display:none">-- m</div>
+            <div class="anchor-status" id="anchorStatus">No GPS fix</div>
         </div>
     </div>
 
@@ -1127,7 +1202,7 @@
         // FLOATING MENU & PANEL TOGGLE
         // ============================================================
 
-        var panelBtnMap = { controlPanel: 'fmWeather', routePanel: 'fmRoute', trackPanel: 'fmTrack' };
+        var panelBtnMap = { controlPanel: 'fmWeather', routePanel: 'fmRoute', trackPanel: 'fmTrack', anchorPanel: 'fmAnchor' };
 
         function togglePanel(panelId) {
             var panel = document.getElementById(panelId);
@@ -4156,6 +4231,7 @@
             }
 
             updateLeadLine(lat, lon);
+            checkAnchorWatch(lat, lon);
         }
 
         function startGpsTracking(centerOnFirst) {
@@ -4481,6 +4557,213 @@
             statusEl.textContent = 'GPX file exported.';
         }
         window.exportTrackGPX = exportTrackGPX;
+
+        // ============================================================
+        // ANCHOR WATCH
+        // ============================================================
+
+        var anchorWatch = { active: false, lat: null, lon: null, radius: 30, alarming: false, _pulseTimer: null };
+        var anchorMarker = null;
+        var anchorCircle = null;
+        var anchorAudioCtx = null;
+        var anchorOscillator = null;
+        var anchorGainNode = null;
+        var anchorVibrateInterval = null;
+
+        function toggleAnchorPanel() {
+            document.getElementById('anchorPanel').classList.toggle('collapsed');
+        }
+        window.toggleAnchorPanel = toggleAnchorPanel;
+
+        makePanelDraggable(
+            document.getElementById('anchorPanel'),
+            document.getElementById('anchorPanelHeader'),
+            toggleAnchorPanel
+        );
+
+        function setAnchor() {
+            if (!gpsPrevPos) return;
+            anchorWatch.lat = gpsPrevPos.lat;
+            anchorWatch.lon = gpsPrevPos.lon;
+            anchorWatch.radius = parseFloat(document.getElementById('anchorRadius').value) || 30;
+            anchorWatch.active = true;
+            anchorWatch.alarming = false;
+
+            // Anchor marker on map
+            if (anchorMarker) gpsLayer.removeLayer(anchorMarker);
+            anchorMarker = L.marker([anchorWatch.lat, anchorWatch.lon], {
+                icon: L.divIcon({
+                    className: 'anchor-map-icon',
+                    html: '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#e65100" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+                        '<circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="21"/><line x1="8" y1="21" x2="16" y2="21"/><path d="M5 15a7 7 0 0 0 14 0"/></svg>',
+                    iconSize: [28, 28], iconAnchor: [14, 14]
+                }),
+                zIndexOffset: 800
+            });
+            gpsLayer.addLayer(anchorMarker);
+            anchorMarker.bindPopup('<div style="text-align:center;font-size:12px;"><strong>Anchor</strong><br>' +
+                anchorWatch.lat.toFixed(6) + ', ' + anchorWatch.lon.toFixed(6) + '</div>');
+
+            // Radius circle
+            if (anchorCircle) gpsLayer.removeLayer(anchorCircle);
+            anchorCircle = L.circle([anchorWatch.lat, anchorWatch.lon], {
+                radius: anchorWatch.radius,
+                color: '#e65100', fillColor: '#ff6d00', fillOpacity: 0.08,
+                weight: 2, opacity: 0.6, dashArray: '6, 4'
+            });
+            gpsLayer.addLayer(anchorCircle);
+
+            updateAnchorUI();
+        }
+        window.setAnchor = setAnchor;
+
+        function clearAnchor() {
+            anchorWatch.active = false;
+            anchorWatch.alarming = false;
+            anchorWatch.lat = null;
+            anchorWatch.lon = null;
+            stopAnchorAlarm();
+            if (anchorMarker) { gpsLayer.removeLayer(anchorMarker); anchorMarker = null; }
+            if (anchorCircle) { gpsLayer.removeLayer(anchorCircle); anchorCircle = null; }
+            updateAnchorUI();
+        }
+        window.clearAnchor = clearAnchor;
+
+        function updateAnchorUI() {
+            var setBtn = document.getElementById('anchorSetBtn');
+            var clearBtn = document.getElementById('anchorClearBtn');
+            var statusEl = document.getElementById('anchorStatus');
+            var distEl = document.getElementById('anchorDistance');
+            var radiusInput = document.getElementById('anchorRadius');
+            var hasGps = !!gpsPrevPos;
+
+            if (anchorWatch.active) {
+                setBtn.textContent = 'Anchor Set';
+                setBtn.classList.add('active');
+                setBtn.disabled = true;
+                clearBtn.disabled = false;
+                radiusInput.disabled = true;
+                distEl.style.display = '';
+                statusEl.className = 'anchor-status active';
+                statusEl.textContent = 'Watching \u2014 ' + anchorWatch.lat.toFixed(5) + ', ' + anchorWatch.lon.toFixed(5);
+            } else {
+                setBtn.textContent = 'Drop Anchor';
+                setBtn.classList.remove('active');
+                setBtn.disabled = !hasGps;
+                clearBtn.disabled = true;
+                radiusInput.disabled = false;
+                distEl.style.display = 'none';
+                distEl.className = 'anchor-distance';
+                distEl.textContent = '-- m';
+                statusEl.className = 'anchor-status';
+                statusEl.textContent = hasGps ? 'Ready' : 'No GPS fix';
+            }
+        }
+
+        function checkAnchorWatch(lat, lon) {
+            updateAnchorUI();
+            if (!anchorWatch.active) return;
+
+            var dist = distanceMeters(lat, lon, anchorWatch.lat, anchorWatch.lon);
+            var distEl = document.getElementById('anchorDistance');
+            var statusEl = document.getElementById('anchorStatus');
+
+            distEl.textContent = dist < 1000 ? dist.toFixed(1) + ' m' : (dist / 1000).toFixed(2) + ' km';
+
+            // Allow radius change while not alarming
+            if (!anchorWatch.alarming) {
+                var newRadius = parseFloat(document.getElementById('anchorRadius').value) || 30;
+                if (newRadius !== anchorWatch.radius) {
+                    anchorWatch.radius = newRadius;
+                    if (anchorCircle) anchorCircle.setRadius(newRadius);
+                }
+            }
+
+            if (dist > anchorWatch.radius) {
+                // DRAG DETECTED
+                distEl.className = 'anchor-distance alarm';
+                statusEl.className = 'anchor-status alarm';
+                statusEl.textContent = 'ANCHOR DRAG! ' + dist.toFixed(0) + 'm > ' + anchorWatch.radius + 'm';
+                if (!anchorWatch.alarming) {
+                    anchorWatch.alarming = true;
+                    startAnchorAlarm();
+                }
+                if (anchorCircle) anchorCircle.setStyle({ color: '#e53935', fillColor: '#e53935' });
+            } else {
+                distEl.className = 'anchor-distance';
+                statusEl.className = 'anchor-status active';
+                statusEl.textContent = 'Watching \u2014 ' + anchorWatch.lat.toFixed(5) + ', ' + anchorWatch.lon.toFixed(5);
+                if (anchorWatch.alarming) {
+                    anchorWatch.alarming = false;
+                    stopAnchorAlarm();
+                    if (anchorCircle) anchorCircle.setStyle({ color: '#e65100', fillColor: '#ff6d00' });
+                }
+            }
+        }
+
+        // ---- Alarm: Web Audio API beep + vibration ----
+
+        function startAnchorAlarm() {
+            try {
+                if (!anchorAudioCtx) {
+                    anchorAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (anchorAudioCtx.state === 'suspended') anchorAudioCtx.resume();
+
+                anchorGainNode = anchorAudioCtx.createGain();
+                anchorGainNode.gain.value = 0.3;
+                anchorGainNode.connect(anchorAudioCtx.destination);
+
+                anchorOscillator = anchorAudioCtx.createOscillator();
+                anchorOscillator.type = 'square';
+                anchorOscillator.frequency.value = 750;
+                anchorOscillator.connect(anchorGainNode);
+                anchorOscillator.start();
+
+                // Pulse gain for beeping pattern
+                (function pulseGain() {
+                    if (!anchorWatch.alarming || !anchorGainNode) return;
+                    var t = anchorAudioCtx.currentTime;
+                    anchorGainNode.gain.setValueAtTime(0.3, t);
+                    anchorGainNode.gain.setValueAtTime(0, t + 0.2);
+                    anchorGainNode.gain.setValueAtTime(0.3, t + 0.4);
+                    anchorGainNode.gain.setValueAtTime(0, t + 0.6);
+                    anchorGainNode.gain.setValueAtTime(0.3, t + 0.8);
+                    anchorGainNode.gain.setValueAtTime(0, t + 1.0);
+                    anchorWatch._pulseTimer = setTimeout(pulseGain, 1500);
+                })();
+            } catch (e) {
+                console.warn('Anchor alarm audio failed:', e.message);
+            }
+
+            // Vibration
+            if (navigator.vibrate) {
+                navigator.vibrate([200, 100, 200, 100, 200]);
+                anchorVibrateInterval = setInterval(function () {
+                    navigator.vibrate([200, 100, 200, 100, 200]);
+                }, 1500);
+            }
+        }
+
+        function stopAnchorAlarm() {
+            if (anchorOscillator) {
+                try { anchorOscillator.stop(); } catch (e) {}
+                anchorOscillator = null;
+            }
+            if (anchorGainNode) {
+                try { anchorGainNode.disconnect(); } catch (e) {}
+                anchorGainNode = null;
+            }
+            if (anchorWatch._pulseTimer) {
+                clearTimeout(anchorWatch._pulseTimer);
+                anchorWatch._pulseTimer = null;
+            }
+            if (anchorVibrateInterval) {
+                clearInterval(anchorVibrateInterval);
+                anchorVibrateInterval = null;
+            }
+            if (navigator.vibrate) navigator.vibrate(0);
+        }
 
         // ============================================================
         // INIT
