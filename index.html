@@ -4583,6 +4583,13 @@
 
         function setAnchor() {
             if (!gpsPrevPos) return;
+
+            // Unlock AudioContext on user gesture (required for iOS)
+            if (!anchorAudioCtx) {
+                anchorAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (anchorAudioCtx.state === 'suspended') anchorAudioCtx.resume();
+
             anchorWatch.lat = gpsPrevPos.lat;
             anchorWatch.lon = gpsPrevPos.lon;
             anchorWatch.radius = parseFloat(document.getElementById('anchorRadius').value) || 30;
@@ -4705,9 +4712,8 @@
 
         function startAnchorAlarm() {
             try {
-                if (!anchorAudioCtx) {
-                    anchorAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                }
+                // AudioContext already created & unlocked in setAnchor() during user gesture
+                if (!anchorAudioCtx) return;
                 if (anchorAudioCtx.state === 'suspended') anchorAudioCtx.resume();
 
                 anchorGainNode = anchorAudioCtx.createGain();
