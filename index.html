@@ -831,7 +831,7 @@
             white-space: nowrap;
             pointer-events: none;
         }
-        .sog-cog-display.visible { display: flex; gap: 16px; align-items: center; }
+        .sog-cog-display.visible { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
         .sog-cog-item {
             display: flex; align-items: baseline; gap: 4px;
         }
@@ -844,6 +844,26 @@
         .sog-cog-unit {
             font-size: 10px; opacity: 0.6; margin-left: 2px;
         }
+        .wx-sep {
+            width: 1px; height: 20px; background: rgba(255,255,255,0.25);
+            margin: 0 2px; flex-shrink: 0;
+        }
+        .wx-item {
+            display: flex; align-items: baseline; gap: 3px; font-size: 12px;
+        }
+        .wx-item-label { font-size: 9px; font-weight: 600; opacity: 0.6; }
+        .wx-item-value { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .wx-item-unit { font-size: 9px; opacity: 0.6; }
+        .wx-toggle {
+            background: none; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px;
+            color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px;
+            cursor: pointer; pointer-events: auto; opacity: 0.7;
+            transition: opacity 0.2s, background 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .wx-toggle:hover { opacity: 1; }
+        .wx-toggle.active { background: rgba(66,133,244,0.4); border-color: rgba(66,133,244,0.6); opacity: 1; }
+        .wx-paused-label { font-size: 10px; opacity: 0.4; font-style: italic; }
 
         /* ---- iOS Install Banner ---- */
         .ios-install-banner {
@@ -926,6 +946,23 @@
             <span class="sog-cog-value" id="cogValue">---</span>
             <span class="sog-cog-unit">&deg;</span>
         </div>
+        <div class="wx-sep" id="wxSep" style="display:none"></div>
+        <div class="wx-item" id="wxWind" style="display:none">
+            <span class="wx-item-label">W</span>
+            <span class="wx-item-value" id="wxWindVal">--</span>
+            <span class="wx-item-unit">kts</span>
+        </div>
+        <div class="wx-item" id="wxWave" style="display:none">
+            <span class="wx-item-label">Wv</span>
+            <span class="wx-item-value" id="wxWaveVal">--</span>
+            <span class="wx-item-unit">m</span>
+        </div>
+        <div class="wx-item" id="wxTemp" style="display:none">
+            <span class="wx-item-value" id="wxTempVal">--</span>
+            <span class="wx-item-unit">&deg;C</span>
+        </div>
+        <button class="wx-toggle" id="wxToggleBtn" title="Toggle live weather">WX</button>
+        <span class="wx-paused-label" id="wxPausedLabel">off</span>
     </div>
 
     <div class="control-panel" id="controlPanel">
@@ -4731,6 +4768,9 @@
             gpsIsMoving = moving;
             updateSogCogDisplay();
 
+            // Refresh weather at position (throttled by cache TTL)
+            maybeRefreshWxHere(lat, lon);
+
             var icon = moving ? createGpsMovingIcon(gpsHeading) : createGpsStationaryIcon();
 
             if (!gpsMarker) {
@@ -5418,6 +5458,158 @@
         };
         var _logEntryIsNew = false; // true when opening "New Log" form
 
+        // ---- Weather at exact position (Open-Meteo) ----
+        var _wxHereCache = null; // { lat, lon, timestamp, data }
+        var WX_HERE_TTL = 5 * 60 * 1000; // 5 minutes
+        var WX_HERE_DIST = 1000; // 1km — reuse cache if moved less
+        var _wxHereFetching = false;
+        var wxHerePaused = true; // starts paused
+
+        // Init pause state from localStorage
+        try {
+            var saved = localStorage.getItem('wx_here_paused');
+            if (saved === '0') wxHerePaused = false;
+        } catch (e) {}
+
+        function weatherCodeToText(code) {
+            if (code == null) return '';
+            if (code === 0) return 'Clear';
+            if (code <= 3) return code === 1 ? 'Partly Cloudy' : 'Overcast';
+            if (code >= 45 && code <= 48) return 'Fog';
+            if (code >= 51 && code <= 55) return 'Drizzle';
+            if (code >= 61 && code <= 65) return 'Rain';
+            if (code >= 71 && code <= 77) return 'Snow';
+            if (code >= 80 && code <= 82) return 'Showers';
+            if (code >= 95) return 'Thunderstorm';
+            return '';
+        }
+
+        function fetchWeatherHere(lat, lon) {
+            // Return cached if fresh and nearby
+            if (_wxHereCache && (Date.now() - _wxHereCache.timestamp) < WX_HERE_TTL) {
+                var d = distanceMeters(lat, lon, _wxHereCache.lat, _wxHereCache.lon);
+                if (d < WX_HERE_DIST) return Promise.resolve(_wxHereCache.data);
+            }
+            if (_wxHereFetching) return Promise.resolve(_wxHereCache ? _wxHereCache.data : null);
+            _wxHereFetching = true;
+
+            var forecastUrl = 'https://api.open-meteo.com/v1/forecast' +
+                '?latitude=' + lat.toFixed(4) +
+                '&longitude=' + lon.toFixed(4) +
+                '&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m,surface_pressure,temperature_2m,weather_code' +
+                '&wind_speed_unit=kn&timezone=auto';
+
+            var marineLon = (lon - 0.25).toFixed(4);
+            var marineUrl = 'https://marine-api.open-meteo.com/v1/marine' +
+                '?latitude=' + lat.toFixed(4) +
+                '&longitude=' + marineLon +
+                '&current=wave_height,wave_direction,swell_wave_height,swell_wave_period' +
+                '&timezone=auto';
+
+            return Promise.all([
+                fetchWithRetry(forecastUrl, 'WX-Here Forecast').catch(function () { return null; }),
+                fetchWithRetry(marineUrl, 'WX-Here Marine').catch(function () { return null; })
+            ]).then(function (results) {
+                _wxHereFetching = false;
+                var fc = results[0], mr = results[1];
+                var data = {};
+                if (fc && fc.current) {
+                    var c = fc.current;
+                    data.windSpeed = c.wind_speed_10m;
+                    data.windDir = c.wind_direction_10m;
+                    data.gusts = c.wind_gusts_10m;
+                    data.pressure = c.surface_pressure;
+                    data.temp = c.temperature_2m;
+                    data.weatherCode = c.weather_code;
+                }
+                if (mr && mr.current) {
+                    var m = mr.current;
+                    data.waveHeight = m.wave_height;
+                    data.waveDir = m.wave_direction;
+                    data.swellHeight = m.swell_wave_height;
+                    data.swellPeriod = m.swell_wave_period;
+                }
+                data.timestamp = Date.now();
+                _wxHereCache = { lat: lat, lon: lon, timestamp: Date.now(), data: data };
+                return data;
+            }).catch(function () {
+                _wxHereFetching = false;
+                return _wxHereCache ? _wxHereCache.data : null;
+            });
+        }
+
+        function updateWeatherHereDisplay(data) {
+            var sep = document.getElementById('wxSep');
+            var windEl = document.getElementById('wxWind');
+            var waveEl = document.getElementById('wxWave');
+            var tempEl = document.getElementById('wxTemp');
+            var pausedLabel = document.getElementById('wxPausedLabel');
+
+            if (!data || wxHerePaused) {
+                sep.style.display = 'none';
+                windEl.style.display = 'none';
+                waveEl.style.display = 'none';
+                tempEl.style.display = 'none';
+                pausedLabel.style.display = wxHerePaused ? '' : 'none';
+                return;
+            }
+            pausedLabel.style.display = 'none';
+            sep.style.display = '';
+
+            if (data.windSpeed != null) {
+                document.getElementById('wxWindVal').textContent = Math.round(data.windSpeed);
+                windEl.style.display = '';
+            } else {
+                windEl.style.display = 'none';
+            }
+            if (data.waveHeight != null) {
+                document.getElementById('wxWaveVal').textContent = data.waveHeight.toFixed(1);
+                waveEl.style.display = '';
+            } else {
+                waveEl.style.display = 'none';
+            }
+            if (data.temp != null) {
+                document.getElementById('wxTempVal').textContent = Math.round(data.temp);
+                tempEl.style.display = '';
+            } else {
+                tempEl.style.display = 'none';
+            }
+        }
+
+        function toggleWxHere() {
+            wxHerePaused = !wxHerePaused;
+            try { localStorage.setItem('wx_here_paused', wxHerePaused ? '1' : '0'); } catch (e) {}
+            var btn = document.getElementById('wxToggleBtn');
+            btn.classList.toggle('active', !wxHerePaused);
+            if (wxHerePaused) {
+                updateWeatherHereDisplay(null);
+            } else if (gpsPrevPos) {
+                // Fetch immediately when enabled
+                fetchWeatherHere(gpsPrevPos.lat, gpsPrevPos.lon).then(updateWeatherHereDisplay);
+            }
+        }
+
+        // Init toggle button state
+        (function () {
+            var btn = document.getElementById('wxToggleBtn');
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                toggleWxHere();
+            });
+            btn.classList.toggle('active', !wxHerePaused);
+            if (wxHerePaused) {
+                document.getElementById('wxPausedLabel').style.display = '';
+            } else {
+                document.getElementById('wxPausedLabel').style.display = 'none';
+            }
+        })();
+
+        // Called from updateGpsPosition — throttled by cache TTL
+        function maybeRefreshWxHere(lat, lon) {
+            if (wxHerePaused) return;
+            fetchWeatherHere(lat, lon).then(updateWeatherHereDisplay);
+        }
+
         // ---- Nearest station weather helper ----
         function getNearestStationWeather(lat, lon) {
             if (!lat || !lon || !latestStationData) return null;
@@ -5572,39 +5764,62 @@
             document.getElementById('leEngRev').value = '';
             document.getElementById('leEngTemp').value = '';
 
-            // Weather auto-fill from nearest station
-            var wx = gpsPrevPos ? getNearestStationWeather(gpsPrevPos.lat, gpsPrevPos.lon) : null;
+            // Weather auto-fill — first from nearest station (sync), then exact position (async)
             var wsInput = document.getElementById('leWindSpeed');
             var wdInput = document.getElementById('leWindDir');
             var baroInput = document.getElementById('leBaro');
+            var seaStateInput = document.getElementById('leSeaState');
+            var weatherInput = document.getElementById('leWeather');
 
-            if (wx && wx.windSpeed != null) {
-                wsInput.value = wx.windSpeed;
-                document.getElementById('leWindAuto').style.display = '';
-            } else {
-                wsInput.value = '';
-                document.getElementById('leWindAuto').style.display = 'none';
-            }
-            if (wx && wx.windDir != null) {
-                wdInput.value = wx.windDir;
-                document.getElementById('leWindDirAuto').style.display = '';
-            } else {
-                wdInput.value = '';
-                document.getElementById('leWindDirAuto').style.display = 'none';
-            }
-            if (wx && wx.pressure != null) {
-                baroInput.value = wx.pressure;
-                document.getElementById('leBaroAuto').style.display = '';
-            } else {
-                baroInput.value = '';
-                document.getElementById('leBaroAuto').style.display = 'none';
-            }
-
-            // Dropdowns reset
-            document.getElementById('leSeaState').value = '';
+            // Dropdowns and fields reset
+            wsInput.value = '';
+            wdInput.value = '';
+            baroInput.value = '';
+            seaStateInput.value = '';
             document.getElementById('leVisibility').value = '';
-            document.getElementById('leWeather').value = '';
+            weatherInput.value = '';
             document.getElementById('leComments').value = '';
+            document.getElementById('leWindAuto').style.display = 'none';
+            document.getElementById('leWindDirAuto').style.display = 'none';
+            document.getElementById('leBaroAuto').style.display = 'none';
+
+            // Synchronous fill from nearest station (immediate)
+            var wx = gpsPrevPos ? getNearestStationWeather(gpsPrevPos.lat, gpsPrevPos.lon) : null;
+            if (wx) {
+                if (wx.windSpeed != null) { wsInput.value = wx.windSpeed; document.getElementById('leWindAuto').style.display = ''; }
+                if (wx.windDir != null) { wdInput.value = wx.windDir; document.getElementById('leWindDirAuto').style.display = ''; }
+                if (wx.pressure != null) { baroInput.value = wx.pressure; document.getElementById('leBaroAuto').style.display = ''; }
+            }
+
+            // Async fetch from exact position (overrides nearest-station data when available)
+            if (gpsPrevPos) {
+                fetchWeatherHere(gpsPrevPos.lat, gpsPrevPos.lon).then(function (data) {
+                    if (!data) return;
+                    if (data.windSpeed != null) { wsInput.value = Math.round(data.windSpeed); document.getElementById('leWindAuto').style.display = ''; }
+                    if (data.windDir != null) { wdInput.value = Math.round(data.windDir); document.getElementById('leWindDirAuto').style.display = ''; }
+                    if (data.pressure != null) { baroInput.value = data.pressure.toFixed(1); document.getElementById('leBaroAuto').style.display = ''; }
+                    // Auto-fill Sea State from wave height
+                    if (data.waveHeight != null) {
+                        var h = data.waveHeight;
+                        if (h < 0.1) seaStateInput.value = 'Calm';
+                        else if (h < 0.5) seaStateInput.value = 'Smooth';
+                        else if (h < 1.25) seaStateInput.value = 'Slight';
+                        else if (h < 2.5) seaStateInput.value = 'Moderate';
+                        else if (h < 4) seaStateInput.value = 'Rough';
+                        else if (h < 6) seaStateInput.value = 'Very Rough';
+                        else seaStateInput.value = 'High';
+                    }
+                    // Auto-fill Weather from weather code
+                    if (data.weatherCode != null) {
+                        var wxText = weatherCodeToText(data.weatherCode);
+                        // Map API terms to dropdown values
+                        if (wxText === 'Fog') wxText = 'Haze';
+                        else if (wxText === 'Drizzle' || wxText === 'Showers') wxText = 'Rain';
+                        else if (wxText === 'Snow') wxText = '';
+                        if (wxText) weatherInput.value = wxText;
+                    }
+                });
+            }
         }
 
         // ---- Close entry form ----

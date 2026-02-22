@@ -1,6 +1,6 @@
 // Service Worker — Maritime navigation assist App
 // Cache version: bump this to force re-cache after code changes
-var CACHE_VERSION = 'v3';
+var CACHE_VERSION = 'v4';
 var SHELL_CACHE  = 'shell-' + CACHE_VERSION;
 var CDN_CACHE    = 'cdn-' + CACHE_VERSION;
 var TILE_CACHE   = 'tiles-v1';
