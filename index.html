@@ -4251,6 +4251,23 @@
         // DOWNLOAD MAP AREA FOR OFFLINE
         // ============================================================
 
+        // Add download button as Leaflet control
+        var DownloadAreaControl = L.Control.extend({
+            options: { position: 'bottomleft' },
+            onAdd: function () {
+                var div = L.DomUtil.create('div', 'leaflet-bar offline-map-ctrl');
+                div.title = 'Download map area for offline use';
+                div.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#e65100" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                    '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>' +
+                    '<polyline points="7 10 12 15 17 10"/>' +
+                    '<line x1="12" y1="15" x2="12" y2="3"/></svg>';
+                L.DomEvent.disableClickPropagation(div);
+                div.addEventListener('click', function () { openDlAreaDialog(); });
+                return div;
+            }
+        });
+        map.addControl(new DownloadAreaControl());
+
         // ---- Keep Screen On toggle ----
         var _screenOnManual = false; // user-toggled screen-on (independent of track wake lock)
         var ScreenOnControl = L.Control.extend({
@@ -4285,23 +4302,6 @@
             }
         });
         map.addControl(new ScreenOnControl());
-
-        // Add download button as Leaflet control
-        var DownloadAreaControl = L.Control.extend({
-            options: { position: 'bottomleft' },
-            onAdd: function () {
-                var div = L.DomUtil.create('div', 'leaflet-bar offline-map-ctrl');
-                div.title = 'Download map area for offline use';
-                div.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#e65100" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-                    '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>' +
-                    '<polyline points="7 10 12 15 17 10"/>' +
-                    '<line x1="12" y1="15" x2="12" y2="3"/></svg>';
-                L.DomEvent.disableClickPropagation(div);
-                div.addEventListener('click', function () { openDlAreaDialog(); });
-                return div;
-            }
-        });
-        map.addControl(new DownloadAreaControl());
 
         function estimateTileCount(bounds, zMin, zMax) {
             var total = 0;
