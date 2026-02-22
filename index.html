@@ -2446,9 +2446,46 @@
                     updateBoatPopup();
                 }, { passive: false });
             }
-            // Attach wheel now and re-attach when layer is toggled back on
-            boatMarker.on('add', attachBoatWheel);
+            // Two-finger rotate on boat for touch devices
+            function attachBoatTouch() {
+                var el = boatMarker.getElement();
+                if (!el) return;
+                var startAngle = null;
+
+                el.addEventListener('touchstart', function (e) {
+                    if (e.touches.length === 2) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var dx = e.touches[1].clientX - e.touches[0].clientX;
+                        var dy = e.touches[1].clientY - e.touches[0].clientY;
+                        startAngle = Math.atan2(dy, dx);
+                    }
+                }, { passive: false });
+
+                el.addEventListener('touchmove', function (e) {
+                    if (e.touches.length === 2 && startAngle !== null) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var dx = e.touches[1].clientX - e.touches[0].clientX;
+                        var dy = e.touches[1].clientY - e.touches[0].clientY;
+                        var currentAngle = Math.atan2(dy, dx);
+                        var delta = (currentAngle - startAngle) * (180 / Math.PI);
+                        startAngle = currentAngle;
+                        boatHeading = ((boatHeading + delta) % 360 + 360) % 360;
+                        updateBoatIcon();
+                        updateBoatPopup();
+                    }
+                }, { passive: false });
+
+                el.addEventListener('touchend', function () {
+                    startAngle = null;
+                });
+            }
+
+            // Attach wheel and touch now, and re-attach when layer is toggled back on
+            boatMarker.on('add', function () { attachBoatWheel(); attachBoatTouch(); });
             attachBoatWheel();
+            attachBoatTouch();
         }
 
         // ============================================================
