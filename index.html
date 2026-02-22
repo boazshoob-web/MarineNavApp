@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Israel Coast Wind, Waves &amp; Pressure</title>
+    <title>Maritime navigation assist</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4a90d9">
     <meta name="mobile-web-app-capable" content="yes">
@@ -592,10 +592,176 @@
         .dl-progress .progress-fill { height: 100%; background: #e65100; border-radius: 2px; transition: width 0.3s; }
         .dl-storage-info { font-size: 10px; color: #999; margin-top: 8px; }
 
+        /* Logbook Panel */
+        .log-panel {
+            position: absolute; top: 80px; right: 10px; z-index: 1000;
+            background: rgba(255, 255, 255, 0.95); border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+            -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+            min-width: 220px; overflow: hidden; display: none;
+            transition: max-height 0.3s ease;
+        }
+        .log-panel.visible { display: block; }
+        .log-panel-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 14px; cursor: grab; user-select: none;
+            background: rgba(92, 107, 192, 0.1);
+            border-bottom: 1px solid rgba(92, 107, 192, 0.2);
+        }
+        .log-panel-header:active { cursor: grabbing; }
+        .log-panel-header:hover { background: rgba(92, 107, 192, 0.18); }
+        .log-panel-header h3 { font-size: 13px; font-weight: 600; color: #5c6bc0; margin: 0; }
+        .log-panel-toggle { font-size: 14px; color: #5c6bc0; transition: transform 0.3s; }
+        .log-panel.collapsed .log-panel-toggle { transform: rotate(-90deg); }
+        .log-panel-body { padding: 12px 14px; }
+        .log-panel.collapsed .log-panel-body { display: none; }
+        .log-status { font-size: 11px; color: #888; margin-bottom: 8px; }
+        .log-status.active { color: #43a047; font-weight: 600; }
+        .log-buttons { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
+        .log-btn {
+            flex: 1; min-width: 0; padding: 6px 8px;
+            border: none; border-radius: 5px;
+            font-size: 11px; font-weight: 600; cursor: pointer;
+            transition: background 0.2s, opacity 0.2s; color: #fff;
+        }
+        .log-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .log-btn-new { background: #43a047; }
+        .log-btn-new:hover:not(:disabled) { background: #388e3c; }
+        .log-btn-entry { background: #5c6bc0; }
+        .log-btn-entry:hover:not(:disabled) { background: #3f51b5; }
+        .log-btn-close { background: #e65100; }
+        .log-btn-close:hover:not(:disabled) { background: #bf360c; }
+        .log-btn-export { background: #00897b; }
+        .log-btn-export:hover:not(:disabled) { background: #00796b; }
+        .saved-logs { margin-top: 10px; display: none; }
+        .saved-logs h4 { font-size: 11px; color: #5c6bc0; margin: 0 0 6px 0; border-bottom: 1px solid #e0e0e0; padding-bottom: 4px; }
+        .saved-log-item {
+            display: flex; align-items: center; gap: 6px;
+            padding: 5px 0; border-bottom: 1px solid #f0f0f0; font-size: 11px;
+        }
+        .saved-log-item:last-child { border-bottom: none; }
+        .log-indicator { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .log-indicator.log-open { background: #43a047; }
+        .log-indicator.log-closed { background: #bdbdbd; }
+        .log-name { flex: 1; color: #333; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .log-name:hover { color: #5c6bc0; text-decoration: underline; }
+        .log-info { font-size: 10px; color: #999; white-space: nowrap; }
+        .log-delete { background: none; border: none; color: #999; cursor: pointer; font-size: 16px; padding: 0 4px; line-height: 1; }
+        .log-delete:hover { color: #e53935; }
+
+        /* Log Action Chooser */
+        .log-action-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4); z-index: 10000;
+            align-items: center; justify-content: center;
+        }
+        .log-action-overlay.visible { display: flex; }
+        .log-action-box {
+            background: #fff; border-radius: 12px; padding: 20px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+            max-width: 260px; width: 85%; text-align: center;
+        }
+        .log-action-box h3 { font-size: 14px; color: #5c6bc0; margin: 0 0 14px 0; }
+        .log-action-btns { display: flex; flex-direction: column; gap: 8px; }
+        .log-action-btns button {
+            padding: 10px 12px; border: none; border-radius: 6px;
+            font-size: 13px; font-weight: 600; cursor: pointer; color: #fff;
+        }
+        .log-action-view { background: #5c6bc0; }
+        .log-action-view:hover { background: #3f51b5; }
+        .log-action-share { background: #00897b; }
+        .log-action-share:hover { background: #00796b; }
+        .log-action-cancel { background: #e0e0e0; color: #555 !important; }
+        .log-action-cancel:hover { background: #ccc; }
+
+        /* Log View Table */
+        .log-view-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4); z-index: 10001;
+            align-items: center; justify-content: center;
+        }
+        .log-view-overlay.visible { display: flex; }
+        .log-view-box {
+            background: #fff; border-radius: 12px; padding: 20px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+            max-width: 95vw; max-height: 90vh; overflow: auto;
+        }
+        .log-view-box h3 { font-size: 15px; color: #5c6bc0; margin: 0 0 6px 0; }
+        .log-view-meta { font-size: 11px; color: #666; margin-bottom: 12px; line-height: 1.6; }
+        .log-view-table {
+            border-collapse: collapse; font-size: 11px; width: 100%; white-space: nowrap;
+        }
+        .log-view-table th {
+            background: #5c6bc0; color: #fff; padding: 5px 8px;
+            font-weight: 600; text-align: left; position: sticky; top: 0;
+        }
+        .log-view-table td {
+            padding: 4px 8px; border-bottom: 1px solid #eee;
+        }
+        .log-view-table tr:nth-child(even) td { background: #f8f8fc; }
+        .log-view-close {
+            margin-top: 12px; padding: 8px 20px; border: none; border-radius: 6px;
+            background: #e0e0e0; color: #555; font-size: 12px; font-weight: 600; cursor: pointer;
+        }
+        .log-view-close:hover { background: #ccc; }
+
+        /* Log Entry Overlay (modal) */
+        .log-entry-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4); z-index: 10000;
+            align-items: center; justify-content: center;
+        }
+        .log-entry-overlay.visible { display: flex; }
+        .log-entry-box {
+            background: #fff; border-radius: 12px; padding: 20px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+            max-width: 440px; width: 92%; max-height: 90vh; overflow-y: auto;
+        }
+        .log-entry-box h3 { font-size: 15px; color: #5c6bc0; margin: 0 0 14px 0; }
+        .log-entry-section { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0; }
+        .log-entry-section:last-of-type { border-bottom: none; }
+        .log-entry-section h4 { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 8px 0; }
+        .log-form-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+        }
+        .log-form-field { display: flex; flex-direction: column; gap: 2px; }
+        .log-form-field.full-width { grid-column: 1 / -1; }
+        .log-form-field label { font-size: 10px; color: #777; font-weight: 500; }
+        .log-form-field input,
+        .log-form-field select,
+        .log-form-field textarea {
+            padding: 6px 8px; border: 1px solid #ddd; border-radius: 5px;
+            font-size: 13px; font-family: inherit;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .log-form-field input:focus,
+        .log-form-field select:focus,
+        .log-form-field textarea:focus {
+            outline: none; border-color: #5c6bc0;
+            box-shadow: 0 0 0 2px rgba(92,107,192,0.15);
+        }
+        .log-form-field input[readonly] { background: #f5f5f5; color: #555; }
+        .log-form-field textarea { resize: vertical; min-height: 50px; }
+        .log-form-field .auto-badge {
+            font-size: 8px; color: #5c6bc0; background: rgba(92,107,192,0.1);
+            border-radius: 3px; padding: 1px 4px; margin-left: 4px; vertical-align: middle;
+        }
+        .log-entry-btns { display: flex; gap: 8px; margin-top: 14px; }
+        .log-entry-btns button {
+            flex: 1; padding: 10px 12px; border: none; border-radius: 6px;
+            font-size: 13px; font-weight: 600; cursor: pointer;
+        }
+        .log-entry-save { background: #5c6bc0; color: #fff; }
+        .log-entry-save:hover { background: #3f51b5; }
+        .log-entry-cancel { background: #e0e0e0; color: #555; }
+        .log-entry-cancel:hover { background: #ccc; }
+
         @media (max-width: 600px) {
             .route-panel { top: 60px; left: 5px; min-width: 180px; }
             .track-panel { top: 60px; left: auto; right: 5px; min-width: 170px; }
             .anchor-panel { top: 60px; right: 5px; min-width: 170px; }
+            .log-panel { top: 60px; right: 5px; min-width: 180px; }
+            .log-entry-box { width: 96%; max-width: none; padding: 16px; max-height: 85vh; }
         }
 
         /* Boat marker */
@@ -697,6 +863,11 @@
         <button class="fm-btn" id="fmAnchor" onclick="togglePanel('anchorPanel')" title="Anchor Watch">
             <svg viewBox="0 0 24 24" fill="none" stroke="#e65100" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="21"/><line x1="8" y1="21" x2="16" y2="21"/><path d="M5 15a7 7 0 0 0 14 0"/>
+            </svg>
+        </button>
+        <button class="fm-btn" id="fmLog" onclick="togglePanel('logPanel')" title="Logbook">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#5c6bc0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="14" y2="11"/>
             </svg>
         </button>
     </div>
@@ -861,6 +1032,32 @@
         </div>
     </div>
 
+    <!-- Logbook Panel -->
+    <div class="log-panel" id="logPanel">
+        <div class="log-panel-header" id="logPanelHeader">
+            <span class="route-panel-drag-hint">&#9776;</span>
+            <h3 style="flex:1">Logbook</h3>
+            <span class="log-panel-toggle">&#9660;</span>
+        </div>
+        <div class="log-panel-body">
+            <div class="log-status" id="logStatus">No open log</div>
+            <div class="log-buttons" id="logBtnsNoLog">
+                <button class="log-btn log-btn-new" onclick="openNewLogForm()">New Log</button>
+            </div>
+            <div class="log-buttons" id="logBtnsActive" style="display:none">
+                <button class="log-btn log-btn-entry" onclick="openAddEntryForm()">Add Entry</button>
+                <button class="log-btn log-btn-export" onclick="exportActiveLogCSV()">Export</button>
+            </div>
+            <div class="log-buttons" id="logBtnsActive2" style="display:none">
+                <button class="log-btn log-btn-close" onclick="closeActiveLog()">Close Log</button>
+            </div>
+            <div class="saved-logs" id="savedLogs">
+                <h4>Saved Logs</h4>
+                <div id="savedLogList"></div>
+            </div>
+        </div>
+    </div>
+
     <div class="legend" style="display:none">
         <h3>Wind Speed (knots)</h3>
         <div class="legend-item"><div class="legend-color" style="background:#3288bd"></div> 0 &ndash; 5 Calm</div>
@@ -951,6 +1148,168 @@
                 <button class="dl-btn-download" id="deleteRouteBoth" style="background:#c62828">Delete Route &amp; Map Tiles</button>
                 <button class="dl-btn-download" id="deleteRouteOnly" style="background:#e65100">Delete Route Only (keep tiles)</button>
                 <button class="dl-btn-cancel" onclick="closeDeleteRouteDialog()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Action Chooser -->
+    <div class="log-action-overlay" id="logActionOverlay" onclick="if(event.target===this)closeLogAction()">
+        <div class="log-action-box">
+            <h3 id="logActionTitle">Logbook</h3>
+            <div class="log-action-btns">
+                <button class="log-action-view" id="logActionViewBtn">View Log</button>
+                <button class="log-action-share" id="logActionShareBtn">Export / Share</button>
+                <button class="log-action-cancel" onclick="closeLogAction()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log View Table -->
+    <div class="log-view-overlay" id="logViewOverlay" onclick="if(event.target===this)closeLogView()">
+        <div class="log-view-box">
+            <h3 id="logViewTitle">Log</h3>
+            <div class="log-view-meta" id="logViewMeta"></div>
+            <div id="logViewTableWrap"></div>
+            <div style="display:flex;gap:8px;margin-top:12px">
+                <button class="log-view-close" style="margin:0;flex:1" onclick="closeLogView()">Close</button>
+                <button class="log-view-close" style="margin:0;flex:1;background:#00897b;color:#fff" id="logViewExportBtn">Export / Share</button>
+                <button class="log-view-close" style="margin:0;background:#c62828;color:#fff;flex:0 0 auto;padding:8px 14px" id="logViewDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Entry Modal -->
+    <div class="log-entry-overlay" id="logEntryOverlay" onclick="if(event.target===this)closeLogEntryForm()">
+        <div class="log-entry-box">
+            <h3 id="logEntryTitle">New Log Entry</h3>
+
+            <!-- New Log header (only shown when starting a new log) -->
+            <div class="log-entry-section" id="logNewSection" style="display:none">
+                <h4>Voyage Details</h4>
+                <div class="log-form-grid">
+                    <div class="log-form-field full-width">
+                        <label for="logCaptain">Captain Name</label>
+                        <input type="text" id="logCaptain" placeholder="Enter captain name">
+                    </div>
+                    <div class="log-form-field">
+                        <label>Departure Date/Time</label>
+                        <input type="text" id="logDepartDT" readonly>
+                    </div>
+                    <div class="log-form-field">
+                        <label>Departure Location</label>
+                        <input type="text" id="logDepartPos" placeholder="lat, lon">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Entry fields (always shown) -->
+            <div class="log-entry-section">
+                <h4>Navigation</h4>
+                <div class="log-form-grid">
+                    <div class="log-form-field">
+                        <label>Date</label>
+                        <input type="text" id="leDate" readonly>
+                    </div>
+                    <div class="log-form-field">
+                        <label>Time</label>
+                        <input type="text" id="leTime" readonly>
+                    </div>
+                    <div class="log-form-field">
+                        <label>Latitude</label>
+                        <input type="text" id="leLat" placeholder="N/A">
+                    </div>
+                    <div class="log-form-field">
+                        <label>Longitude</label>
+                        <input type="text" id="leLon" placeholder="N/A">
+                    </div>
+                    <div class="log-form-field">
+                        <label>SOG (kts)</label>
+                        <input type="text" id="leSOG" placeholder="N/A">
+                    </div>
+                    <div class="log-form-field">
+                        <label>COG (&deg;)</label>
+                        <input type="text" id="leCOG" placeholder="N/A">
+                    </div>
+                </div>
+            </div>
+
+            <div class="log-entry-section">
+                <h4>Engine</h4>
+                <div class="log-form-grid">
+                    <div class="log-form-field">
+                        <label>Eng Rev (RPM)</label>
+                        <input type="number" id="leEngRev" placeholder="RPM">
+                    </div>
+                    <div class="log-form-field">
+                        <label>Eng Temp (&deg;C)</label>
+                        <input type="number" id="leEngTemp" placeholder="&deg;C">
+                    </div>
+                </div>
+            </div>
+
+            <div class="log-entry-section">
+                <h4>Weather &amp; Sea</h4>
+                <div class="log-form-grid">
+                    <div class="log-form-field">
+                        <label>Wind Speed (kts) <span class="auto-badge" id="leWindAuto" style="display:none">AUTO</span></label>
+                        <input type="text" id="leWindSpeed" placeholder="">
+                    </div>
+                    <div class="log-form-field">
+                        <label>Wind Dir (&deg;) <span class="auto-badge" id="leWindDirAuto" style="display:none">AUTO</span></label>
+                        <input type="text" id="leWindDir" placeholder="">
+                    </div>
+                    <div class="log-form-field">
+                        <label>Sea State</label>
+                        <select id="leSeaState">
+                            <option value="">--</option>
+                            <option value="Calm">Calm (glassy)</option>
+                            <option value="Smooth">Smooth (0-0.5m)</option>
+                            <option value="Slight">Slight (0.5-1.25m)</option>
+                            <option value="Moderate">Moderate (1.25-2.5m)</option>
+                            <option value="Rough">Rough (2.5-4m)</option>
+                            <option value="Very Rough">Very Rough (4-6m)</option>
+                            <option value="High">High (6m+)</option>
+                        </select>
+                    </div>
+                    <div class="log-form-field">
+                        <label>Baro Pressure (hPa) <span class="auto-badge" id="leBaroAuto" style="display:none">AUTO</span></label>
+                        <input type="text" id="leBaro" placeholder="">
+                    </div>
+                    <div class="log-form-field">
+                        <label>Visibility</label>
+                        <select id="leVisibility">
+                            <option value="">--</option>
+                            <option value="Good (>10nm)">Good (&gt;10nm)</option>
+                            <option value="Moderate (5-10nm)">Moderate (5-10nm)</option>
+                            <option value="Poor (2-5nm)">Poor (2-5nm)</option>
+                            <option value="Fog (<2nm)">Fog (&lt;2nm)</option>
+                        </select>
+                    </div>
+                    <div class="log-form-field">
+                        <label>Weather</label>
+                        <select id="leWeather">
+                            <option value="">--</option>
+                            <option value="Clear">Clear</option>
+                            <option value="Partly Cloudy">Partly Cloudy</option>
+                            <option value="Overcast">Overcast</option>
+                            <option value="Rain">Rain</option>
+                            <option value="Thunderstorm">Thunderstorm</option>
+                            <option value="Haze">Haze</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="log-entry-section" style="border-bottom:none;margin-bottom:0;padding-bottom:0">
+                <div class="log-form-field full-width">
+                    <label>Comments</label>
+                    <textarea id="leComments" placeholder="Additional remarks..."></textarea>
+                </div>
+            </div>
+
+            <div class="log-entry-btns">
+                <button class="log-entry-save" id="logEntrySaveBtn" onclick="saveLogEntry()">Save Entry</button>
+                <button class="log-entry-cancel" onclick="closeLogEntryForm()">Cancel</button>
             </div>
         </div>
     </div>
@@ -1205,7 +1564,7 @@
         // FLOATING MENU & PANEL TOGGLE
         // ============================================================
 
-        var panelBtnMap = { controlPanel: 'fmWeather', routePanel: 'fmRoute', trackPanel: 'fmTrack', anchorPanel: 'fmAnchor' };
+        var panelBtnMap = { controlPanel: 'fmWeather', routePanel: 'fmRoute', trackPanel: 'fmTrack', anchorPanel: 'fmAnchor', logPanel: 'fmLog' };
 
         function togglePanel(panelId) {
             var panel = document.getElementById(panelId);
@@ -1318,10 +1677,11 @@
         // ============================================================
 
         var DB_NAME = 'ilcoast';
-        var DB_VERSION = 1;
+        var DB_VERSION = 2;
         var STORE_WEATHER = 'weather';
         var STORE_ROUTES = 'routes';
         var STORE_TILES = 'tiles';
+        var STORE_LOGS = 'logs';
         var _db = null;
 
         function openDB() {
@@ -1338,6 +1698,9 @@
                     }
                     if (!db.objectStoreNames.contains(STORE_TILES)) {
                         db.createObjectStore(STORE_TILES);
+                    }
+                    if (!db.objectStoreNames.contains(STORE_LOGS)) {
+                        db.createObjectStore(STORE_LOGS);
                     }
                 };
                 req.onsuccess = function () { _db = req.result; resolve(_db); };
@@ -3056,7 +3419,7 @@
                 new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
             var xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
-                '<gpx version="1.1" creator="Israel Coast Weather App"\n' +
+                '<gpx version="1.1" creator="Maritime navigation assist App"\n' +
                 '  xmlns="http://www.topografix.com/GPX/1/1"\n' +
                 '  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n' +
                 '  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">\n' +
@@ -4529,7 +4892,7 @@
                 new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
 
             var xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
-                '<gpx version="1.1" creator="Israel Coast Weather App"\n' +
+                '<gpx version="1.1" creator="Maritime navigation assist App"\n' +
                 '  xmlns="http://www.topografix.com/GPX/1/1"\n' +
                 '  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n' +
                 '  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">\n' +
@@ -4879,11 +5242,604 @@
         }
 
         // ============================================================
+        // DIGITAL LOGBOOK
+        // ============================================================
+
+        var logbookState = {
+            activeLogId: null  // ID of currently open log, or null
+        };
+        var _logEntryIsNew = false; // true when opening "New Log" form
+
+        // ---- Nearest station weather helper ----
+        function getNearestStationWeather(lat, lon) {
+            if (!lat || !lon || !latestStationData) return null;
+            var bestIdx = -1, bestDist = Infinity;
+            STATIONS.forEach(function (s, i) {
+                var d = distanceMeters(lat, lon, s.lat, s.lon);
+                if (d < bestDist) { bestDist = d; bestIdx = i; }
+            });
+            if (bestIdx < 0 || !latestStationData[bestIdx]) return null;
+            var cur = latestStationData[bestIdx].current;
+            if (!cur) return null;
+            return {
+                windSpeed: cur.wind_speed_10m != null ? Math.round(cur.wind_speed_10m * 10) / 10 : null,
+                windDir: cur.wind_direction_10m != null ? Math.round(cur.wind_direction_10m) : null,
+                pressure: cur.surface_pressure != null ? Math.round(cur.surface_pressure * 10) / 10 : null
+            };
+        }
+
+        // ---- Format position for display ----
+        function formatPosDisplay(lat, lon) {
+            if (lat == null || lon == null) return 'N/A';
+            return lat.toFixed(4) + ', ' + lon.toFixed(4);
+        }
+
+        // ---- Format a location (object or string) for CSV display ----
+        function formatLocationForCSV(loc) {
+            if (!loc) return 'N/A';
+            if (typeof loc === 'string') return loc;
+            if (loc.lat != null && loc.lon != null) return loc.lat.toFixed(4) + ', ' + loc.lon.toFixed(4);
+            return 'N/A';
+        }
+
+        // ---- Parse "lat, lon" string back to object ----
+        function parsePosInput(str) {
+            if (!str) return null;
+            var parts = str.split(',');
+            if (parts.length !== 2) return null;
+            var lat = parseFloat(parts[0].trim());
+            var lon = parseFloat(parts[1].trim());
+            if (isNaN(lat) || isNaN(lon)) return null;
+            return { lat: lat, lon: lon };
+        }
+
+        // ---- Update log panel UI based on state ----
+        function updateLogPanelUI() {
+            var statusEl = document.getElementById('logStatus');
+            var btnsNoLog = document.getElementById('logBtnsNoLog');
+            var btnsActive = document.getElementById('logBtnsActive');
+            var btnsActive2 = document.getElementById('logBtnsActive2');
+
+            if (logbookState.activeLogId) {
+                dbGetStore(STORE_LOGS, logbookState.activeLogId).then(function (log) {
+                    if (log) {
+                        var count = log.entries ? log.entries.length : 0;
+                        statusEl.textContent = 'Log open \u2014 ' + count + ' entr' + (count === 1 ? 'y' : 'ies');
+                        statusEl.className = 'log-status active';
+                    }
+                });
+                btnsNoLog.style.display = 'none';
+                btnsActive.style.display = 'flex';
+                btnsActive2.style.display = 'flex';
+            } else {
+                statusEl.textContent = 'No open log';
+                statusEl.className = 'log-status';
+                btnsNoLog.style.display = 'flex';
+                btnsActive.style.display = 'none';
+                btnsActive2.style.display = 'none';
+            }
+        }
+
+        // ---- Open new log form ----
+        function openNewLogForm() {
+            _logEntryIsNew = true;
+            document.getElementById('logEntryTitle').textContent = 'Start New Log';
+            document.getElementById('logNewSection').style.display = '';
+            document.getElementById('logEntrySaveBtn').textContent = 'Start Log & Save Entry';
+
+            // Pre-fill captain from localStorage
+            var savedCaptain = '';
+            try { savedCaptain = localStorage.getItem('logbook_captain') || ''; } catch (e) {}
+            document.getElementById('logCaptain').value = savedCaptain;
+
+            // Departure date/time
+            var now = new Date();
+            document.getElementById('logDepartDT').value =
+                now.toLocaleDateString('en-GB') + ' ' +
+                now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+            // Departure position — always editable, pre-fill from GPS
+            var departPosInput = document.getElementById('logDepartPos');
+            departPosInput.readOnly = false;
+            departPosInput.value = gpsPrevPos ? formatPosDisplay(gpsPrevPos.lat, gpsPrevPos.lon) : '';
+            departPosInput.placeholder = 'e.g. Herzliya Marina';
+
+            // Fill entry fields
+            populateEntryFields();
+
+            document.getElementById('logEntryOverlay').classList.add('visible');
+        }
+        window.openNewLogForm = openNewLogForm;
+
+        // ---- Open add entry form ----
+        function openAddEntryForm() {
+            _logEntryIsNew = false;
+            document.getElementById('logEntryTitle').textContent = 'New Log Entry';
+            document.getElementById('logNewSection').style.display = 'none';
+            document.getElementById('logEntrySaveBtn').textContent = 'Save Entry';
+
+            populateEntryFields();
+
+            document.getElementById('logEntryOverlay').classList.add('visible');
+        }
+        window.openAddEntryForm = openAddEntryForm;
+
+        // ---- Populate entry form fields with auto-fill ----
+        function populateEntryFields() {
+            var now = new Date();
+            document.getElementById('leDate').value = now.toLocaleDateString('en-GB');
+            document.getElementById('leTime').value = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+            // Position — auto-fill if GPS available, otherwise editable
+            var latInput = document.getElementById('leLat');
+            var lonInput = document.getElementById('leLon');
+            var sogInput = document.getElementById('leSOG');
+            var cogInput = document.getElementById('leCOG');
+
+            if (gpsPrevPos) {
+                latInput.value = gpsPrevPos.lat.toFixed(5);
+                lonInput.value = gpsPrevPos.lon.toFixed(5);
+                latInput.readOnly = true;
+                lonInput.readOnly = true;
+            } else {
+                latInput.value = '';
+                lonInput.value = '';
+                latInput.readOnly = false;
+                lonInput.readOnly = false;
+            }
+
+            if (gpsPrevPos && gpsHasHeading) {
+                sogInput.value = gpsSogKts.toFixed(1);
+                cogInput.value = Math.round(gpsHeading);
+                sogInput.readOnly = true;
+                cogInput.readOnly = true;
+            } else {
+                sogInput.value = '';
+                cogInput.value = '';
+                sogInput.readOnly = false;
+                cogInput.readOnly = false;
+            }
+
+            // Engine fields — always manual
+            document.getElementById('leEngRev').value = '';
+            document.getElementById('leEngTemp').value = '';
+
+            // Weather auto-fill from nearest station
+            var wx = gpsPrevPos ? getNearestStationWeather(gpsPrevPos.lat, gpsPrevPos.lon) : null;
+            var wsInput = document.getElementById('leWindSpeed');
+            var wdInput = document.getElementById('leWindDir');
+            var baroInput = document.getElementById('leBaro');
+
+            if (wx && wx.windSpeed != null) {
+                wsInput.value = wx.windSpeed;
+                document.getElementById('leWindAuto').style.display = '';
+            } else {
+                wsInput.value = '';
+                document.getElementById('leWindAuto').style.display = 'none';
+            }
+            if (wx && wx.windDir != null) {
+                wdInput.value = wx.windDir;
+                document.getElementById('leWindDirAuto').style.display = '';
+            } else {
+                wdInput.value = '';
+                document.getElementById('leWindDirAuto').style.display = 'none';
+            }
+            if (wx && wx.pressure != null) {
+                baroInput.value = wx.pressure;
+                document.getElementById('leBaroAuto').style.display = '';
+            } else {
+                baroInput.value = '';
+                document.getElementById('leBaroAuto').style.display = 'none';
+            }
+
+            // Dropdowns reset
+            document.getElementById('leSeaState').value = '';
+            document.getElementById('leVisibility').value = '';
+            document.getElementById('leWeather').value = '';
+            document.getElementById('leComments').value = '';
+        }
+
+        // ---- Close entry form ----
+        function closeLogEntryForm() {
+            document.getElementById('logEntryOverlay').classList.remove('visible');
+        }
+        window.closeLogEntryForm = closeLogEntryForm;
+
+        // ---- Save log entry ----
+        function saveLogEntry() {
+            var entry = {
+                date: document.getElementById('leDate').value,
+                time: document.getElementById('leTime').value,
+                lat: parseFloat(document.getElementById('leLat').value) || null,
+                lon: parseFloat(document.getElementById('leLon').value) || null,
+                sog: parseFloat(document.getElementById('leSOG').value) || null,
+                cog: parseFloat(document.getElementById('leCOG').value) || null,
+                engRev: document.getElementById('leEngRev').value,
+                engTemp: document.getElementById('leEngTemp').value,
+                windSpeed: document.getElementById('leWindSpeed').value,
+                windDir: document.getElementById('leWindDir').value,
+                seaState: document.getElementById('leSeaState').value,
+                baroPressure: document.getElementById('leBaro').value,
+                visibility: document.getElementById('leVisibility').value,
+                weather: document.getElementById('leWeather').value,
+                comments: document.getElementById('leComments').value
+            };
+
+            if (_logEntryIsNew) {
+                // Start a new log
+                var captainName = document.getElementById('logCaptain').value.trim();
+                if (!captainName) {
+                    document.getElementById('logCaptain').focus();
+                    return;
+                }
+                // Remember captain name
+                try { localStorage.setItem('logbook_captain', captainName); } catch (e) {}
+
+                var now = new Date();
+                var logId = 'log_' + now.getTime();
+                var logRecord = {
+                    id: logId,
+                    captainName: captainName,
+                    departureLocation: document.getElementById('logDepartPos').value.trim() || null,
+                    departureDateTime: now.toISOString(),
+                    destinationLocation: null,
+                    arrivalDateTime: null,
+                    closed: false,
+                    entries: [entry]
+                };
+
+                dbPutStore(STORE_LOGS, logId, logRecord).then(function () {
+                    logbookState.activeLogId = logId;
+                    try { localStorage.setItem('logbook_active', logId); } catch (e) {}
+                    updateLogPanelUI();
+                    refreshSavedLogList();
+                    closeLogEntryForm();
+                });
+            } else {
+                // Append to existing log
+                var logId = logbookState.activeLogId;
+                if (!logId) return;
+
+                dbGetStore(STORE_LOGS, logId).then(function (log) {
+                    if (!log) return;
+                    log.entries.push(entry);
+                    return dbPutStore(STORE_LOGS, logId, log);
+                }).then(function () {
+                    updateLogPanelUI();
+                    closeLogEntryForm();
+                });
+            }
+        }
+        window.saveLogEntry = saveLogEntry;
+
+        // ---- Close active log ----
+        function closeActiveLog() {
+            if (!logbookState.activeLogId) return;
+
+            var destPos = null;
+            if (gpsPrevPos) {
+                var posStr = prompt('Close log — enter arrival location:', formatPosDisplay(gpsPrevPos.lat, gpsPrevPos.lon));
+                if (posStr === null) return;
+                destPos = posStr.trim() || null;
+            } else {
+                var posStr = prompt('Close log — enter arrival location or leave empty:', '');
+                if (posStr === null) return;
+                destPos = posStr.trim() || null;
+            }
+
+            dbGetStore(STORE_LOGS, logbookState.activeLogId).then(function (log) {
+                if (!log) return;
+                var now = new Date();
+                log.closed = true;
+                log.arrivalDateTime = now.toISOString();
+                log.destinationLocation = destPos;
+                return dbPutStore(STORE_LOGS, log.id, log);
+            }).then(function () {
+                logbookState.activeLogId = null;
+                try { localStorage.removeItem('logbook_active'); } catch (e) {}
+                updateLogPanelUI();
+                refreshSavedLogList();
+            });
+        }
+        window.closeActiveLog = closeActiveLog;
+
+        // ---- Export log as CSV ----
+        function exportLogCSV(logId) {
+            dbGetStore(STORE_LOGS, logId).then(function (log) {
+                if (!log) return;
+
+                var rows = [];
+                // Header info
+                rows.push(['Captain:', log.captainName]);
+                var depDT = log.departureDateTime ? new Date(log.departureDateTime) : null;
+                rows.push(['Departure:', depDT ? depDT.toLocaleDateString('en-GB') + ' ' + depDT.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+                    'Position:', formatLocationForCSV(log.departureLocation)]);
+                if (log.closed) {
+                    var arrDT = log.arrivalDateTime ? new Date(log.arrivalDateTime) : null;
+                    rows.push(['Arrival:', arrDT ? arrDT.toLocaleDateString('en-GB') + ' ' + arrDT.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+                        'Position:', formatLocationForCSV(log.destinationLocation)]);
+                }
+                rows.push([]); // separator
+
+                // Column headers
+                rows.push(['Date', 'Time', 'Latitude', 'Longitude', 'SOG (kts)', 'COG (\u00B0)',
+                    'Eng Rev', 'Eng Temp', 'Wind Speed', 'Wind Dir', 'Sea State',
+                    'Baro Pressure', 'Visibility', 'Weather', 'Comments']);
+
+                // Entry rows
+                log.entries.forEach(function (e) {
+                    rows.push([
+                        e.date, e.time,
+                        e.lat != null ? e.lat.toFixed(5) : '',
+                        e.lon != null ? e.lon.toFixed(5) : '',
+                        e.sog != null ? e.sog.toFixed(1) : '',
+                        e.cog != null ? String(e.cog) : '',
+                        e.engRev, e.engTemp, e.windSpeed, e.windDir, e.seaState,
+                        e.baroPressure, e.visibility, e.weather, e.comments
+                    ]);
+                });
+
+                // Build CSV string
+                var csv = rows.map(function (row) {
+                    return row.map(function (cell) {
+                        var s = String(cell == null ? '' : cell);
+                        if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0) {
+                            return '"' + s.replace(/"/g, '""') + '"';
+                        }
+                        return s;
+                    }).join(',');
+                }).join('\r\n');
+
+                // Add BOM for Excel UTF-8 recognition
+                var bom = '\uFEFF';
+                var blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8' });
+                var filename = 'logbook_' + (depDT ? depDT.toISOString().slice(0, 10) : 'unknown') + '.csv';
+
+                // Use share API in PWA mode, download otherwise
+                if (isStandalonePWA() && navigator.share && navigator.canShare) {
+                    var file = new File([blob], filename, { type: 'text/csv' });
+                    if (navigator.canShare({ files: [file] })) {
+                        navigator.share({ files: [file], title: filename }).catch(function (e) {
+                            if (e.name !== 'AbortError') console.warn('Share failed:', e.message);
+                        });
+                        return;
+                    }
+                }
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+        }
+        window.exportLogCSV = exportLogCSV;
+
+        // ---- Export active log shortcut ----
+        function exportActiveLogCSV() {
+            if (logbookState.activeLogId) exportLogCSV(logbookState.activeLogId);
+        }
+        window.exportActiveLogCSV = exportActiveLogCSV;
+
+        // ---- Log action chooser (View / Export) ----
+        var _logActionId = null;
+
+        function openLogAction(logId) {
+            _logActionId = logId;
+            // Set title from log data
+            dbGetStore(STORE_LOGS, logId).then(function (log) {
+                if (!log) return;
+                var depDate = log.departureDateTime ? new Date(log.departureDateTime) : null;
+                document.getElementById('logActionTitle').textContent =
+                    (depDate ? depDate.toLocaleDateString('en-GB') : '') + ' \u2014 ' + (log.captainName || '');
+            });
+            document.getElementById('logActionViewBtn').onclick = function () {
+                var id = _logActionId;
+                closeLogAction();
+                viewLog(id);
+            };
+            document.getElementById('logActionShareBtn').onclick = function () {
+                var id = _logActionId;
+                closeLogAction();
+                exportLogCSV(id);
+            };
+            document.getElementById('logActionOverlay').classList.add('visible');
+        }
+        window.openLogAction = openLogAction;
+
+        function closeLogAction() {
+            document.getElementById('logActionOverlay').classList.remove('visible');
+            _logActionId = null;
+        }
+        window.closeLogAction = closeLogAction;
+
+        // ---- View log as table ----
+        function viewLog(logId) {
+            dbGetStore(STORE_LOGS, logId).then(function (log) {
+                if (!log) return;
+
+                // Title
+                var depDate = log.departureDateTime ? new Date(log.departureDateTime) : null;
+                document.getElementById('logViewTitle').textContent =
+                    'Log \u2014 ' + (log.captainName || 'Unknown');
+
+                // Meta info
+                var meta = '<strong>Captain:</strong> ' + (log.captainName || 'N/A');
+                meta += '<br><strong>Departure:</strong> ' +
+                    (depDate ? depDate.toLocaleDateString('en-GB') + ' ' + depDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : 'N/A') +
+                    ' &mdash; ' + formatLocationForCSV(log.departureLocation);
+                if (log.closed) {
+                    var arrDT = log.arrivalDateTime ? new Date(log.arrivalDateTime) : null;
+                    meta += '<br><strong>Arrival:</strong> ' +
+                        (arrDT ? arrDT.toLocaleDateString('en-GB') + ' ' + arrDT.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : 'N/A') +
+                        ' &mdash; ' + formatLocationForCSV(log.destinationLocation);
+                }
+                var entryCount = log.entries ? log.entries.length : 0;
+                meta += '<br><strong>Entries:</strong> ' + entryCount +
+                    ' &mdash; <em>' + (log.closed ? 'Closed' : 'Open') + '</em>';
+                document.getElementById('logViewMeta').innerHTML = meta;
+
+                // Build table
+                var cols = ['#', 'Date', 'Time', 'Lat', 'Lon', 'SOG', 'COG',
+                    'Eng Rev', 'Eng Temp', 'Wind Spd', 'Wind Dir', 'Sea State',
+                    'Baro', 'Visibility', 'Weather', 'Comments'];
+                var html = '<table class="log-view-table"><thead><tr>';
+                cols.forEach(function (c) { html += '<th>' + c + '</th>'; });
+                html += '</tr></thead><tbody>';
+
+                (log.entries || []).forEach(function (e, i) {
+                    html += '<tr>';
+                    html += '<td>' + (i + 1) + '</td>';
+                    html += '<td>' + (e.date || '') + '</td>';
+                    html += '<td>' + (e.time || '') + '</td>';
+                    html += '<td>' + (e.lat != null ? e.lat.toFixed(4) : '') + '</td>';
+                    html += '<td>' + (e.lon != null ? e.lon.toFixed(4) : '') + '</td>';
+                    html += '<td>' + (e.sog != null ? e.sog.toFixed(1) : '') + '</td>';
+                    html += '<td>' + (e.cog != null ? e.cog : '') + '</td>';
+                    html += '<td>' + (e.engRev || '') + '</td>';
+                    html += '<td>' + (e.engTemp || '') + '</td>';
+                    html += '<td>' + (e.windSpeed || '') + '</td>';
+                    html += '<td>' + (e.windDir || '') + '</td>';
+                    html += '<td>' + (e.seaState || '') + '</td>';
+                    html += '<td>' + (e.baroPressure || '') + '</td>';
+                    html += '<td>' + (e.visibility || '') + '</td>';
+                    html += '<td>' + (e.weather || '') + '</td>';
+                    html += '<td style="white-space:normal;max-width:150px">' + (e.comments || '') + '</td>';
+                    html += '</tr>';
+                });
+
+                html += '</tbody></table>';
+                document.getElementById('logViewTableWrap').innerHTML = html;
+
+                document.getElementById('logViewExportBtn').onclick = function () {
+                    closeLogView();
+                    exportLogCSV(logId);
+                };
+                document.getElementById('logViewDeleteBtn').onclick = function () {
+                    if (!confirm('Delete this log? This cannot be undone.')) return;
+                    closeLogView();
+                    dbDeleteStore(STORE_LOGS, logId).then(function () {
+                        if (logbookState.activeLogId === logId) {
+                            logbookState.activeLogId = null;
+                            try { localStorage.removeItem('logbook_active'); } catch (e) {}
+                            updateLogPanelUI();
+                        }
+                        refreshSavedLogList();
+                    });
+                };
+
+                document.getElementById('logViewOverlay').classList.add('visible');
+            });
+        }
+        window.viewLog = viewLog;
+
+        function closeLogView() {
+            document.getElementById('logViewOverlay').classList.remove('visible');
+        }
+        window.closeLogView = closeLogView;
+
+        // ---- Saved logs list ----
+        function refreshSavedLogList() {
+            var container = document.getElementById('savedLogs');
+            var list = document.getElementById('savedLogList');
+
+            dbGetAllKeys(STORE_LOGS).then(function (keys) {
+                if (keys.length === 0) {
+                    container.style.display = 'none';
+                    return;
+                }
+                container.style.display = 'block';
+
+                return Promise.all(keys.map(function (key) {
+                    return dbGetStore(STORE_LOGS, key);
+                })).then(function (logs) {
+                    logs.sort(function (a, b) {
+                        var ta = a ? new Date(a.departureDateTime).getTime() : 0;
+                        var tb = b ? new Date(b.departureDateTime).getTime() : 0;
+                        return tb - ta;
+                    });
+                    list.innerHTML = '';
+                    logs.forEach(function (log) {
+                        if (!log) return;
+                        var item = document.createElement('div');
+                        item.className = 'saved-log-item';
+                        var isOpen = !log.closed;
+                        var indicatorClass = isOpen ? 'log-open' : 'log-closed';
+                        var depDate = log.departureDateTime ? new Date(log.departureDateTime) : null;
+                        var displayName = (depDate ? depDate.toLocaleDateString('en-GB') : 'Unknown') +
+                            ' \u2014 ' + (log.captainName || 'Unknown');
+                        var entryCount = log.entries ? log.entries.length : 0;
+                        var info = entryCount + ' entr' + (entryCount === 1 ? 'y' : 'ies');
+                        if (isOpen) info += ' \u00B7 open';
+
+                        item.innerHTML =
+                            '<span class="log-indicator ' + indicatorClass + '" title="' + (isOpen ? 'Open' : 'Closed') + '"></span>' +
+                            '<span class="log-name" onclick="openLogAction(\'' + log.id + '\')" title="View or export">' +
+                            displayName + '</span>' +
+                            '<span class="log-info">' + info + '</span>' +
+                            '<button class="log-delete" onclick="deleteLog(\'' + log.id + '\')" title="Delete">&times;</button>';
+                        list.appendChild(item);
+                    });
+                });
+            });
+        }
+
+        // ---- Delete log ----
+        function deleteLog(logId) {
+            if (!confirm('Delete this log? This cannot be undone.')) return;
+            dbDeleteStore(STORE_LOGS, logId).then(function () {
+                if (logbookState.activeLogId === logId) {
+                    logbookState.activeLogId = null;
+                    try { localStorage.removeItem('logbook_active'); } catch (e) {}
+                    updateLogPanelUI();
+                }
+                refreshSavedLogList();
+            });
+        }
+        window.deleteLog = deleteLog;
+
+        // ---- Toggle logbook panel collapse ----
+        function toggleLogPanel() {
+            document.getElementById('logPanel').classList.toggle('collapsed');
+        }
+
+        // ---- Init logbook on load ----
+        function initLogbook() {
+            // Restore active log
+            try {
+                var activeId = localStorage.getItem('logbook_active');
+                if (activeId) {
+                    dbGetStore(STORE_LOGS, activeId).then(function (log) {
+                        if (log && !log.closed) {
+                            logbookState.activeLogId = activeId;
+                        } else {
+                            // Log was closed or deleted
+                            try { localStorage.removeItem('logbook_active'); } catch (e) {}
+                        }
+                        updateLogPanelUI();
+                    });
+                }
+            } catch (e) {}
+
+            // Make panel draggable
+            makePanelDraggable(
+                document.getElementById('logPanel'),
+                document.getElementById('logPanelHeader'),
+                toggleLogPanel
+            );
+
+            refreshSavedLogList();
+        }
+
+        // ============================================================
         // INIT
         // ============================================================
 
         initApiKeyUI();
         initBoat();
+        initLogbook();
         refreshOfflineRouteList();
         refreshData();          // single pull on load
         isPaused = true;         // start paused — no auto-refresh
