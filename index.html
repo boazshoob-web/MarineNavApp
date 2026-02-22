@@ -553,6 +553,18 @@
         .anchor-distance.alarm { color: #e53935; background: rgba(229,57,53,0.08); }
         .anchor-map-icon { background: none !important; border: none !important; }
 
+        /* Screen-On Toggle */
+        .screen-on-ctrl {
+            background: #fff; border-radius: 6px; box-shadow: 0 1px 5px rgba(0,0,0,0.25);
+            cursor: pointer; width: 34px; height: 34px;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s;
+        }
+        .screen-on-ctrl:hover { background: #f0f0f0; }
+        .screen-on-ctrl svg { width: 20px; height: 20px; }
+        .screen-on-ctrl.active { background: #e3f2fd; }
+        .screen-on-ctrl.active svg { stroke: #1565c0; }
+
         /* Offline Map Download */
         .offline-map-ctrl {
             background: #fff; border-radius: 6px; box-shadow: 0 1px 5px rgba(0,0,0,0.25);
@@ -4239,6 +4251,41 @@
         // DOWNLOAD MAP AREA FOR OFFLINE
         // ============================================================
 
+        // ---- Keep Screen On toggle ----
+        var _screenOnManual = false; // user-toggled screen-on (independent of track wake lock)
+        var ScreenOnControl = L.Control.extend({
+            options: { position: 'bottomleft' },
+            onAdd: function () {
+                var div = L.DomUtil.create('div', 'leaflet-bar screen-on-ctrl');
+                div.title = 'Keep screen on';
+                // Sun/screen icon
+                div.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                    '<circle cx="12" cy="12" r="5"/>' +
+                    '<line x1="12" y1="1" x2="12" y2="3"/>' +
+                    '<line x1="12" y1="21" x2="12" y2="23"/>' +
+                    '<line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>' +
+                    '<line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>' +
+                    '<line x1="1" y1="12" x2="3" y2="12"/>' +
+                    '<line x1="21" y1="12" x2="23" y2="12"/>' +
+                    '<line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>' +
+                    '<line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+                L.DomEvent.disableClickPropagation(div);
+                div.addEventListener('click', function () {
+                    _screenOnManual = !_screenOnManual;
+                    div.classList.toggle('active', _screenOnManual);
+                    div.title = _screenOnManual ? 'Screen lock ON — tap to turn off' : 'Keep screen on';
+                    if (_screenOnManual) {
+                        requestWakeLock();
+                    } else if (!trackState.active) {
+                        // Only release if tracking isn't also holding it
+                        releaseWakeLock();
+                    }
+                });
+                return div;
+            }
+        });
+        map.addControl(new ScreenOnControl());
+
         // Add download button as Leaflet control
         var DownloadAreaControl = L.Control.extend({
             options: { position: 'bottomleft' },
@@ -4950,7 +4997,7 @@
 
         // Re-acquire wake lock when page becomes visible again (e.g., user switches back to app)
         document.addEventListener('visibilitychange', function () {
-            if (document.visibilityState === 'visible' && trackState.active && !_wakeLockSentinel) {
+            if (document.visibilityState === 'visible' && (trackState.active || _screenOnManual) && !_wakeLockSentinel) {
                 if ('wakeLock' in navigator) {
                     navigator.wakeLock.request('screen').then(function (sentinel) {
                         _wakeLockSentinel = sentinel;
@@ -5060,7 +5107,7 @@
                 trackState.watchId = null;
             }
             trackState.active = false;
-            releaseWakeLock();
+            if (!_screenOnManual) releaseWakeLock();
             updateTrackButtons();
 
             // Restart the regular GPS watcher so SOG/COG keeps updating
