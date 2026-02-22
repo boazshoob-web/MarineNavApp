@@ -831,7 +831,8 @@
             white-space: nowrap;
             pointer-events: none;
         }
-        .sog-cog-display.visible { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
+        .sog-cog-display.visible { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+        .sog-cog-row { display: flex; gap: 12px; align-items: center; }
         .sog-cog-item {
             display: flex; align-items: baseline; gap: 4px;
         }
@@ -844,10 +845,7 @@
         .sog-cog-unit {
             font-size: 10px; opacity: 0.6; margin-left: 2px;
         }
-        .wx-sep {
-            width: 1px; height: 20px; background: rgba(255,255,255,0.25);
-            margin: 0 2px; flex-shrink: 0;
-        }
+        .wx-row { display: flex; gap: 8px; align-items: center; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 2px; }
         .wx-item {
             display: flex; align-items: baseline; gap: 3px; font-size: 12px;
         }
@@ -936,33 +934,36 @@
     </div>
 
     <div class="sog-cog-display" id="sogCogDisplay">
-        <div class="sog-cog-item">
-            <span class="sog-cog-label">SOG</span>
-            <span class="sog-cog-value" id="sogValue">0.0</span>
-            <span class="sog-cog-unit">kts</span>
+        <div class="sog-cog-row">
+            <div class="sog-cog-item">
+                <span class="sog-cog-label">SOG</span>
+                <span class="sog-cog-value" id="sogValue">0.0</span>
+                <span class="sog-cog-unit">kts</span>
+            </div>
+            <div class="sog-cog-item">
+                <span class="sog-cog-label">COG</span>
+                <span class="sog-cog-value" id="cogValue">---</span>
+                <span class="sog-cog-unit">&deg;</span>
+            </div>
         </div>
-        <div class="sog-cog-item">
-            <span class="sog-cog-label">COG</span>
-            <span class="sog-cog-value" id="cogValue">---</span>
-            <span class="sog-cog-unit">&deg;</span>
+        <div class="wx-row" id="wxRow" style="display:none">
+            <div class="wx-item" id="wxWind" style="display:none">
+                <span class="wx-item-label">W</span>
+                <span class="wx-item-value" id="wxWindVal">--</span>
+                <span class="wx-item-unit">kts</span>
+            </div>
+            <div class="wx-item" id="wxWave" style="display:none">
+                <span class="wx-item-label">Wv</span>
+                <span class="wx-item-value" id="wxWaveVal">--</span>
+                <span class="wx-item-unit">m</span>
+            </div>
+            <div class="wx-item" id="wxTemp" style="display:none">
+                <span class="wx-item-value" id="wxTempVal">--</span>
+                <span class="wx-item-unit">&deg;C</span>
+            </div>
+            <button class="wx-toggle" id="wxToggleBtn" title="Toggle live weather">WX</button>
+            <span class="wx-paused-label" id="wxPausedLabel">off</span>
         </div>
-        <div class="wx-sep" id="wxSep" style="display:none"></div>
-        <div class="wx-item" id="wxWind" style="display:none">
-            <span class="wx-item-label">W</span>
-            <span class="wx-item-value" id="wxWindVal">--</span>
-            <span class="wx-item-unit">kts</span>
-        </div>
-        <div class="wx-item" id="wxWave" style="display:none">
-            <span class="wx-item-label">Wv</span>
-            <span class="wx-item-value" id="wxWaveVal">--</span>
-            <span class="wx-item-unit">m</span>
-        </div>
-        <div class="wx-item" id="wxTemp" style="display:none">
-            <span class="wx-item-value" id="wxTempVal">--</span>
-            <span class="wx-item-unit">&deg;C</span>
-        </div>
-        <button class="wx-toggle" id="wxToggleBtn" title="Toggle live weather">WX</button>
-        <span class="wx-paused-label" id="wxPausedLabel">off</span>
     </div>
 
     <div class="control-panel" id="controlPanel">
@@ -4647,7 +4648,7 @@
         var gpsHeading = 0;
         var gpsHasHeading = false;   // true once a heading has been computed
         var gpsSogKts = 0;
-        var GPS_MOVE_THRESHOLD = 5;  // meters — below this considered stationary
+        var GPS_MOVE_THRESHOLD = 2;  // meters — below this considered stationary (fallback only)
         var gpsLeadLine = null;      // L.Polyline for leading line
 
         function isMobileDevice() {
@@ -4746,11 +4747,28 @@
                 : '---';
         }
 
-        function updateGpsPosition(lat, lon, accuracy) {
+        function updateGpsPosition(lat, lon, accuracy, nativeSpeed, nativeHeading) {
             // Detect movement and compute SOG/COG
+            // Prefer native GPS speed/heading (Doppler-based, accurate at low speeds)
             var now = Date.now();
             var moving = false;
-            if (gpsPrevPos) {
+            if (nativeSpeed != null && nativeSpeed >= 0) {
+                // coords.speed is in m/s
+                gpsSogKts = nativeSpeed * 1.94384;
+                moving = gpsSogKts >= 0.3; // ~0.15 m/s minimum to count as moving
+                if (moving && nativeHeading != null && nativeHeading >= 0) {
+                    gpsHeading = nativeHeading;
+                    gpsHasHeading = true;
+                } else if (moving && gpsPrevPos) {
+                    // Have speed but no native heading — compute from positions
+                    var dist = distanceMeters(gpsPrevPos.lat, gpsPrevPos.lon, lat, lon);
+                    if (dist > GPS_MOVE_THRESHOLD) {
+                        gpsHeading = bearingDeg(gpsPrevPos.lat, gpsPrevPos.lon, lat, lon);
+                        gpsHasHeading = true;
+                    }
+                }
+            } else if (gpsPrevPos) {
+                // Fallback: compute from consecutive positions
                 var dist = distanceMeters(gpsPrevPos.lat, gpsPrevPos.lon, lat, lon);
                 var dtSec = (now - gpsPrevPos.time) / 1000;
                 if (dist > GPS_MOVE_THRESHOLD && dtSec > 0) {
@@ -4813,7 +4831,7 @@
             var firstFix = true;
             gpsWatchId = navigator.geolocation.watchPosition(
                 function (pos) {
-                    updateGpsPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+                    updateGpsPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.speed, pos.coords.heading);
                     if (firstFix && centerOnFirst) {
                         map.setView([pos.coords.latitude, pos.coords.longitude], Math.max(map.getZoom(), 12));
                         firstFix = false;
@@ -4839,7 +4857,7 @@
                     if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
                     navigator.geolocation.getCurrentPosition(
                         function (pos) {
-                            updateGpsPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+                            updateGpsPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.speed, pos.coords.heading);
                             map.setView([pos.coords.latitude, pos.coords.longitude], Math.max(map.getZoom(), 13));
                         },
                         function (err) { alert('Could not get location: ' + err.message); },
@@ -5011,7 +5029,7 @@
                 function (pos) {
                     var ll = [pos.coords.latitude, pos.coords.longitude];
                     trackState.positions.push(ll);
-                    updateGpsPosition(ll[0], ll[1], pos.coords.accuracy);
+                    updateGpsPosition(ll[0], ll[1], pos.coords.accuracy, pos.coords.speed, pos.coords.heading);
 
                     if (trackState.polyline) {
                         trackState.polyline.addLatLng(ll);
@@ -5539,14 +5557,14 @@
         }
 
         function updateWeatherHereDisplay(data) {
-            var sep = document.getElementById('wxSep');
+            var wxRow = document.getElementById('wxRow');
             var windEl = document.getElementById('wxWind');
             var waveEl = document.getElementById('wxWave');
             var tempEl = document.getElementById('wxTemp');
             var pausedLabel = document.getElementById('wxPausedLabel');
 
             if (!data || wxHerePaused) {
-                sep.style.display = 'none';
+                wxRow.style.display = 'none';
                 windEl.style.display = 'none';
                 waveEl.style.display = 'none';
                 tempEl.style.display = 'none';
@@ -5554,7 +5572,7 @@
                 return;
             }
             pausedLabel.style.display = 'none';
-            sep.style.display = '';
+            wxRow.style.display = '';
 
             if (data.windSpeed != null) {
                 document.getElementById('wxWindVal').textContent = Math.round(data.windSpeed);
