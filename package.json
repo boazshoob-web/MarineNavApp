@@ -1,0 +1,18 @@
+{
+  "name": "marina-nav-assist",
+  "version": "1.0.0",
+  "description": "Real-time wind, wave, and pressure conditions along the Israeli Mediterranean coastline",
+  "main": "sw.js",
+  "scripts": {
+    "build": "node scripts/build-www.js",
+    "sync": "npm run build && npx cap sync"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/core": "^6.2.1"
+  }
+}
