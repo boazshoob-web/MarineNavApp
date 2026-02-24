@@ -4799,8 +4799,16 @@
                 var diff = angleDiff(h, ref);
                 if (diff < maxLeft) maxLeft = diff;
                 if (diff > maxRight) maxRight = diff;
-                sinSum += Math.sin(h * Math.PI / 180);
-                cosSum += Math.cos(h * Math.PI / 180);
+                // Time-weighted: weight = duration this heading was held (ms)
+                var dt;
+                if (i < gpsHeadingHistory.length - 1) {
+                    dt = gpsHeadingHistory[i + 1].time - gpsHeadingHistory[i].time;
+                } else {
+                    dt = now - gpsHeadingHistory[i].time; // last sample held until now
+                }
+                var rad = h * Math.PI / 180;
+                sinSum += Math.sin(rad) * dt;
+                cosSum += Math.cos(rad) * dt;
             }
 
             var avgHeading = (Math.atan2(sinSum, cosSum) * 180 / Math.PI + 360) % 360;
