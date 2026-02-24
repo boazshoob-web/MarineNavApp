@@ -13,6 +13,7 @@
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
@@ -1410,6 +1411,7 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
     <script>
     (function () {
         'use strict';
@@ -4699,6 +4701,10 @@
         var gpsSogKts = 0;
         var GPS_MOVE_THRESHOLD = 2;  // meters — below this considered stationary (fallback only)
         var gpsLeadLine = null;      // L.Polyline for leading line
+        var gpsHeadingHistory = [];  // [{ time: ms, heading: deg }, ...]
+        var gpsSweepLeftLine = null;   // red — farthest left
+        var gpsSweepRightLine = null;  // green — farthest right
+        var gpsSweepAvgLine = null;    // black — average
 
         function isMobileDevice() {
             return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 768);
@@ -4765,6 +4771,68 @@
             return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
         }
 
+        // Normalize angle difference to [-180, +180]
+        function angleDiff(a, b) {
+            var d = ((a - b) % 360 + 540) % 360 - 180;
+            return d;
+        }
+
+        // Compute sweep angles from heading history over the last 15 minutes.
+        // Returns { left: deg, right: deg, avg: deg } or null if insufficient data.
+        // "left" = farthest counter-clockwise, "right" = farthest clockwise relative to the current heading.
+        function computeSweepAngles() {
+            var now = Date.now();
+            var cutoff = now - 15 * 60 * 1000;
+            // Prune entries older than 15 minutes
+            while (gpsHeadingHistory.length && gpsHeadingHistory[0].time < cutoff) {
+                gpsHeadingHistory.shift();
+            }
+            if (gpsHeadingHistory.length < 2) return null;
+
+            var ref = gpsHeading; // current heading as reference
+            var maxLeft = 0;   // most negative (counter-clockwise)
+            var maxRight = 0;  // most positive (clockwise)
+            var sinSum = 0, cosSum = 0;
+
+            for (var i = 0; i < gpsHeadingHistory.length; i++) {
+                var h = gpsHeadingHistory[i].heading;
+                var diff = angleDiff(h, ref);
+                if (diff < maxLeft) maxLeft = diff;
+                if (diff > maxRight) maxRight = diff;
+                sinSum += Math.sin(h * Math.PI / 180);
+                cosSum += Math.cos(h * Math.PI / 180);
+            }
+
+            var avgHeading = (Math.atan2(sinSum, cosSum) * 180 / Math.PI + 360) % 360;
+
+            return {
+                left: (ref + maxLeft + 360) % 360,
+                right: (ref + maxRight + 360) % 360,
+                avg: avgHeading
+            };
+        }
+
+        function removeSweepLines() {
+            if (gpsSweepLeftLine) { gpsLayer.removeLayer(gpsSweepLeftLine); gpsSweepLeftLine = null; }
+            if (gpsSweepRightLine) { gpsLayer.removeLayer(gpsSweepRightLine); gpsSweepRightLine = null; }
+            if (gpsSweepAvgLine) { gpsLayer.removeLayer(gpsSweepAvgLine); gpsSweepAvgLine = null; }
+        }
+
+        function updateSweepLine(lat, lon, bearing, distM, lineObj, color) {
+            var endPt = destinationPoint(lat, lon, bearing, distM);
+            if (lineObj) {
+                lineObj.setLatLngs([[lat, lon], endPt]);
+                return lineObj;
+            } else {
+                var line = L.polyline([[lat, lon], endPt], {
+                    color: color, weight: 1.5, opacity: 0.7,
+                    dashArray: '6, 4'
+                });
+                gpsLayer.addLayer(line);
+                return line;
+            }
+        }
+
         function updateLeadLine(lat, lon) {
             var nmVal = parseFloat(document.getElementById('tLeadLine').value) || 0;
             if (nmVal > 0) {
@@ -4779,11 +4847,21 @@
                     });
                     gpsLayer.addLayer(gpsLeadLine);
                 }
+
+                // Update sweep lines
+                var sweep = computeSweepAngles();
+                if (sweep) {
+                    gpsSweepLeftLine = updateSweepLine(lat, lon, sweep.left, distM, gpsSweepLeftLine, '#D32F2F');
+                    gpsSweepRightLine = updateSweepLine(lat, lon, sweep.right, distM, gpsSweepRightLine, '#388E3C');
+                    gpsSweepAvgLine = updateSweepLine(lat, lon, sweep.avg, distM, gpsSweepAvgLine, '#000000');
+                }
             } else {
                 if (gpsLeadLine) {
                     gpsLayer.removeLayer(gpsLeadLine);
                     gpsLeadLine = null;
                 }
+                removeSweepLines();
+                gpsHeadingHistory = [];
             }
         }
 
@@ -4871,6 +4949,11 @@
                 }
             }
 
+            // Record heading for sweep lines (only when moving with valid heading)
+            if (moving && gpsHasHeading) {
+                gpsHeadingHistory.push({ time: Date.now(), heading: gpsHeading });
+            }
+
             updateLeadLine(lat, lon);
             checkAnchorWatch(lat, lon);
         }
@@ -4917,6 +5000,24 @@
             }
         });
         map.addControl(new LocateControl());
+
+        // Search / Geocoder control (Nominatim, no API key)
+        L.Control.geocoder({
+            defaultMarkGeocode: false,
+            position: 'topright',
+            placeholder: 'Search location...',
+            geocoder: L.Control.Geocoder.nominatim({
+                geocodingQueryParams: {
+                    viewbox: '33.5,30.0,36.5,34.0',
+                    bounded: 0
+                }
+            })
+        }).on('markgeocode', function (e) {
+            var bb = e.geocode.bbox;
+            map.fitBounds(bb.pad(0.1));
+            L.marker(e.geocode.center).addTo(map)
+                .bindPopup(e.geocode.name).openPopup();
+        }).addTo(map);
 
         // Auto-start continuous tracking on mobile
         if (isMobileDevice()) {
