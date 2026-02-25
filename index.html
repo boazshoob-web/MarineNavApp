@@ -3734,19 +3734,7 @@
             return window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
         }
 
-        function downloadOrShareGPX(xml, filename) {
-            var blob = new Blob([xml], { type: 'application/gpx+xml' });
-            // Use Web Share API on mobile (PWA, Capacitor, or mobile browser)
-            if (isMobileDevice() && navigator.share && navigator.canShare) {
-                var file = new File([blob], filename, { type: 'application/gpx+xml' });
-                if (navigator.canShare({ files: [file] })) {
-                    navigator.share({ files: [file], title: filename }).catch(function (e) {
-                        if (e.name !== 'AbortError') console.warn('Share failed:', e.message);
-                    });
-                    return;
-                }
-            }
-            // Standard download for browsers and Android PWA
+        function downloadBlob(blob, filename) {
             var url = URL.createObjectURL(blob);
             var a = document.createElement('a');
             a.href = url;
@@ -3755,6 +3743,21 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+        }
+
+        function downloadOrShareGPX(xml, filename) {
+            var blob = new Blob([xml], { type: 'application/gpx+xml' });
+            // Use Web Share API on mobile (PWA, Capacitor, or mobile browser)
+            if (isMobileDevice() && navigator.share && navigator.canShare) {
+                var file = new File([blob], filename, { type: 'application/gpx+xml' });
+                if (navigator.canShare({ files: [file] })) {
+                    navigator.share({ files: [file], title: filename }).catch(function (e) {
+                        if (e.name !== 'AbortError') downloadBlob(blob, filename);
+                    });
+                    return;
+                }
+            }
+            downloadBlob(blob, filename);
         }
 
         window.exportRouteGPX = exportRouteGPX;
@@ -6224,19 +6227,12 @@
                     var file = new File([blob], filename, { type: 'text/csv' });
                     if (navigator.canShare({ files: [file] })) {
                         navigator.share({ files: [file], title: filename }).catch(function (e) {
-                            if (e.name !== 'AbortError') console.warn('Share failed:', e.message);
+                            if (e.name !== 'AbortError') downloadBlob(blob, filename);
                         });
                         return;
                     }
                 }
-                var url = URL.createObjectURL(blob);
-                var a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                downloadBlob(blob, filename);
             });
         }
         window.exportLogCSV = exportLogCSV;
