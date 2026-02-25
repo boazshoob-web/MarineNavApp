@@ -1099,6 +1099,8 @@
             <div class="track-buttons" style="margin-top:4px">
                 <button class="track-btn track-btn-clear" id="tClearBtn" onclick="clearTrack()" disabled>Clear</button>
                 <button class="track-btn" id="tExportBtn" onclick="exportTrackGPX()" disabled style="background:#5c6bc0;color:#fff">Export GPX</button>
+                <button class="track-btn" onclick="importTrackGPX()" style="background:#5c6bc0;color:#fff">Import GPX</button>
+                <input type="file" id="tImportFile" accept=".gpx,application/gpx+xml" style="display:none">
             </div>
             <div class="track-buttons" style="margin-top:4px">
                 <button class="track-btn" id="tSaveRouteBtn" onclick="saveTrackAsRoute()" disabled style="background:#e65100;color:#fff;min-width:100%">Save as Route</button>
@@ -5378,6 +5380,107 @@
             statusEl.textContent = 'GPX file exported.';
         }
         window.exportTrackGPX = exportTrackGPX;
+
+        function importTrackGPX() {
+            var fileInput = document.getElementById('tImportFile');
+            fileInput.value = '';
+            fileInput.onchange = function () {
+                if (!fileInput.files || !fileInput.files[0]) return;
+                var reader = new FileReader();
+                reader.onload = function (e) {
+                    var parser = new DOMParser();
+                    var doc = parser.parseFromString(e.target.result, 'application/xml');
+                    if (doc.querySelector('parsererror')) {
+                        alert('Invalid GPX file.');
+                        return;
+                    }
+
+                    // Clear any existing track
+                    clearTrack();
+
+                    // Extract track points from <trk><trkseg><trkpt>
+                    var positions = [];
+                    var trkpts = doc.querySelectorAll('trkseg > trkpt');
+                    if (trkpts.length > 0) {
+                        trkpts.forEach(function (pt) {
+                            var lat = parseFloat(pt.getAttribute('lat'));
+                            var lon = parseFloat(pt.getAttribute('lon'));
+                            if (!isNaN(lat) && !isNaN(lon)) positions.push([lat, lon]);
+                        });
+                    } else {
+                        // Fallback: try <rte><rtept> (route format)
+                        var rtepts = doc.querySelectorAll('rte > rtept');
+                        rtepts.forEach(function (pt) {
+                            var lat = parseFloat(pt.getAttribute('lat'));
+                            var lon = parseFloat(pt.getAttribute('lon'));
+                            if (!isNaN(lat) && !isNaN(lon)) positions.push([lat, lon]);
+                        });
+                    }
+
+                    if (positions.length < 2) {
+                        alert('GPX file contains no track or route data.');
+                        return;
+                    }
+
+                    trackState.positions = positions;
+
+                    // Draw polyline
+                    trackState.polyline = L.polyline(positions, {
+                        color: '#43a047', weight: 3, opacity: 0.8
+                    });
+                    trackLayer.addLayer(trackState.polyline);
+
+                    // Extract waypoints as pins
+                    var wpts = doc.querySelectorAll('gpx > wpt');
+                    wpts.forEach(function (wpt) {
+                        var lat = parseFloat(wpt.getAttribute('lat'));
+                        var lon = parseFloat(wpt.getAttribute('lon'));
+                        if (isNaN(lat) || isNaN(lon)) return;
+                        var nameEl = wpt.querySelector('name');
+                        var pinLabel = nameEl ? nameEl.textContent : '';
+                        trackState.pinCount++;
+                        var pinSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="30" viewBox="0 0 20 30">' +
+                            '<path d="M10 0 C4.5 0 0 4.5 0 10 C0 18 10 30 10 30 S20 18 20 10 C20 4.5 15.5 0 10 0Z" fill="#e53935" stroke="#b71c1c" stroke-width="1"/>' +
+                            '<circle cx="10" cy="10" r="4" fill="#fff"/>' +
+                            '<text x="10" y="13" text-anchor="middle" font-size="7" font-weight="700" fill="#b71c1c">' + trackState.pinCount + '</text>' +
+                            '</svg>';
+                        var pin = L.marker([lat, lon], {
+                            icon: L.divIcon({
+                                html: pinSvg,
+                                className: 'track-pin-marker',
+                                iconSize: [20, 30],
+                                iconAnchor: [10, 30]
+                            })
+                        });
+                        pin.bindPopup('<div style="font-size:12px"><strong>' + escapeXml(pinLabel || 'Pin #' + trackState.pinCount) + '</strong><br>' +
+                            lat.toFixed(5) + ', ' + lon.toFixed(5) + '</div>');
+                        trackLayer.addLayer(pin);
+                        trackState.pins.push(pin);
+                    });
+
+                    // Extract track name
+                    var trkName = doc.querySelector('trk > name');
+                    var metaName = doc.querySelector('metadata > name');
+                    var trackName = (trkName ? trkName.textContent : '') || (metaName ? metaName.textContent : '');
+                    if (trackName) {
+                        document.getElementById('tTrackName').value = trackName;
+                    }
+
+                    // Fit map to track bounds
+                    if (trackState.polyline) {
+                        map.fitBounds(trackState.polyline.getBounds().pad(0.1));
+                    }
+
+                    updateTrackButtons();
+                    var statusEl = document.getElementById('trackStatus');
+                    statusEl.className = 'track-status';
+                    statusEl.textContent = 'Imported: ' + (trackName || 'track') + ' (' + positions.length + ' points)';
+                };
+                reader.readAsText(fileInput.files[0]);
+            };
+            fileInput.click();
+        }
+        window.importTrackGPX = importTrackGPX;
 
         // ---- Ramer-Douglas-Peucker track simplification ----
         // Returns perpendicular distance (meters) from point P to line segment A-B
