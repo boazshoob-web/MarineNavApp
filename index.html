@@ -1057,6 +1057,8 @@
                 <button class="route-btn route-btn-auto" id="rAutoBtn" onclick="autoCorrectRoute()" disabled>Auto-Correct Route</button>
                 <button class="route-btn route-btn-hazards" id="rHazardsBtn" onclick="showRouteHazards()" disabled style="display:none">Show Hazards</button>
                 <button class="route-btn route-btn-export" id="rExportBtn" onclick="exportRouteGPX()" disabled>Export GPX</button>
+                <button class="route-btn" onclick="importRouteGPX()" style="background:#5c6bc0;color:#fff">Import GPX</button>
+                <input type="file" id="rImportFile" accept=".gpx,application/gpx+xml" style="display:none">
                 <button class="route-btn route-btn-save-route" id="rSaveRouteBtn" onclick="saveRouteLight()" disabled>Save Route</button>
                 <button class="route-btn route-btn-save" id="rSaveOfflineBtn" onclick="saveRouteOffline()" disabled>Save for Offline</button>
             </div>
@@ -3726,6 +3728,78 @@
             });
         }
         window.exportSavedRouteGPX = exportSavedRouteGPX;
+
+        function importRouteGPX() {
+            var fileInput = document.getElementById('rImportFile');
+            fileInput.value = '';
+            fileInput.onchange = function () {
+                if (!fileInput.files || !fileInput.files[0]) return;
+                var reader = new FileReader();
+                reader.onload = function (e) {
+                    var parser = new DOMParser();
+                    var doc = parser.parseFromString(e.target.result, 'application/xml');
+                    if (doc.querySelector('parsererror')) {
+                        alert('Invalid GPX file.');
+                        return;
+                    }
+
+                    // Try <rte><rtept> first (route format), then fall back to <trk><trkseg><trkpt>
+                    var waypoints = [];
+                    var rtepts = doc.querySelectorAll('rte > rtept');
+                    if (rtepts.length > 0) {
+                        rtepts.forEach(function (pt) {
+                            var lat = parseFloat(pt.getAttribute('lat'));
+                            var lon = parseFloat(pt.getAttribute('lon'));
+                            if (!isNaN(lat) && !isNaN(lon)) waypoints.push(L.latLng(lat, lon));
+                        });
+                    } else {
+                        var trkpts = doc.querySelectorAll('trkseg > trkpt');
+                        trkpts.forEach(function (pt) {
+                            var lat = parseFloat(pt.getAttribute('lat'));
+                            var lon = parseFloat(pt.getAttribute('lon'));
+                            if (!isNaN(lat) && !isNaN(lon)) waypoints.push(L.latLng(lat, lon));
+                        });
+                    }
+
+                    // Fallback: standalone <wpt> elements
+                    if (waypoints.length < 2) {
+                        var wpts = doc.querySelectorAll('gpx > wpt');
+                        wpts.forEach(function (wpt) {
+                            var lat = parseFloat(wpt.getAttribute('lat'));
+                            var lon = parseFloat(wpt.getAttribute('lon'));
+                            if (!isNaN(lat) && !isNaN(lon)) waypoints.push(L.latLng(lat, lon));
+                        });
+                    }
+
+                    if (waypoints.length < 2) {
+                        alert('GPX file contains insufficient waypoints.');
+                        return;
+                    }
+
+                    clearRoute();
+                    rebuildRoute(waypoints);
+                    if (!map.hasLayer(routeLayer)) map.addLayer(routeLayer);
+
+                    document.getElementById('rClearBtn').disabled = false;
+                    document.getElementById('rAutoBtn').disabled = false;
+                    document.getElementById('rExportBtn').disabled = false;
+                    document.getElementById('rSaveRouteBtn').disabled = false;
+                    document.getElementById('rSaveOfflineBtn').disabled = false;
+
+                    var bounds = getRouteBounds(waypoints.map(function (ll) { return { lat: ll.lat, lng: ll.lng }; }), 0.02);
+                    map.fitBounds([[bounds.minLat, bounds.minLon], [bounds.maxLat, bounds.maxLon]]);
+
+                    var routeName = '';
+                    var rteName = doc.querySelector('rte > name');
+                    var metaName = doc.querySelector('metadata > name');
+                    routeName = (rteName ? rteName.textContent : '') || (metaName ? metaName.textContent : '');
+                    setRouteStatus('Imported: ' + (routeName || 'route') + ' (' + waypoints.length + ' waypoints)', 'ok');
+                };
+                reader.readAsText(fileInput.files[0]);
+            };
+            fileInput.click();
+        }
+        window.importRouteGPX = importRouteGPX;
 
         function escapeXml(s) {
             return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
