@@ -5030,6 +5030,18 @@
                 .bindPopup(e.geocode.name).openPopup();
         }).addTo(map);
 
+        // Hide SOG/COG display while geocoder search box is focused
+        var geocoderInput = document.querySelector('.leaflet-control-geocoder input');
+        if (geocoderInput) {
+            var sogCogEl = document.getElementById('sogCogDisplay');
+            geocoderInput.addEventListener('focus', function () {
+                sogCogEl.style.display = 'none';
+            });
+            geocoderInput.addEventListener('blur', function () {
+                if (sogCogEl.classList.contains('visible')) sogCogEl.style.display = '';
+            });
+        }
+
         // Auto-start continuous tracking on mobile
         if (isMobileDevice()) {
             startGpsTracking(false);
