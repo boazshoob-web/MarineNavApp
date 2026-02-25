@@ -3737,7 +3737,7 @@
         function downloadOrShareGPX(xml, filename) {
             var blob = new Blob([xml], { type: 'application/gpx+xml' });
             // Use Web Share API on mobile (PWA, Capacitor, or mobile browser)
-            if (navigator.share && navigator.canShare) {
+            if (isMobileDevice() && navigator.share && navigator.canShare) {
                 var file = new File([blob], filename, { type: 'application/gpx+xml' });
                 if (navigator.canShare({ files: [file] })) {
                     navigator.share({ files: [file], title: filename }).catch(function (e) {
