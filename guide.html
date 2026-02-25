@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marine Nav Assist — User Guide</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    line-height: 1.6; color: #333; background: #f8f9fa;
+    padding: 0 0 60px;
+  }
+  header {
+    background: linear-gradient(135deg, #4a90d9, #357abd);
+    color: #fff; padding: 24px 20px; text-align: center;
+  }
+  header h1 { font-size: 22px; font-weight: 700; }
+  header p { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+  .back-btn {
+    position: absolute; top: 16px; left: 12px;
+    color: #fff; text-decoration: none; font-size: 24px; line-height: 1;
+  }
+  .container { max-width: 720px; margin: 0 auto; padding: 0 16px; }
+
+  .toc { background: #fff; border-radius: 8px; margin: 16px 0; padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .toc h2 { font-size: 15px; margin-bottom: 10px; color: #4a90d9; }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin-bottom: 4px; }
+  .toc a { color: #357abd; text-decoration: none; font-size: 13px; }
+  .toc a:hover { text-decoration: underline; }
+
+  section { background: #fff; border-radius: 8px; margin: 12px 0; padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  section h2 { font-size: 16px; color: #4a90d9; margin-bottom: 10px; border-bottom: 2px solid #e8f0fe; padding-bottom: 6px; }
+  section h3 { font-size: 14px; color: #555; margin: 14px 0 6px; }
+  section p, section li { font-size: 13px; }
+  section ul, section ol { padding-left: 20px; margin: 6px 0; }
+  section li { margin-bottom: 4px; }
+
+  .key { display: inline-block; background: #e8f0fe; color: #357abd; font-weight: 600; padding: 1px 6px; border-radius: 3px; font-size: 12px; }
+  .warn { color: #e65100; font-weight: 600; }
+  .tip { background: #e8f5e9; border-left: 3px solid #43a047; padding: 8px 12px; margin: 8px 0; border-radius: 0 4px 4px 0; font-size: 12px; }
+  .note { background: #fff3e0; border-left: 3px solid #e65100; padding: 8px 12px; margin: 8px 0; border-radius: 0 4px 4px 0; font-size: 12px; }
+
+  dt { font-weight: 600; font-size: 13px; margin-top: 6px; }
+  dd { margin-left: 16px; font-size: 13px; margin-bottom: 4px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; }
+  th, td { border: 1px solid #e0e0e0; padding: 6px 8px; text-align: left; }
+  th { background: #f5f5f5; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<header style="position:relative">
+  <a href="index.html" class="back-btn">&larr;</a>
+  <h1>Marine Nav Assist</h1>
+  <p>User Guide</p>
+</header>
+
+<div class="container">
+
+<!-- TABLE OF CONTENTS -->
+<div class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#map">Map &amp; Layers</a></li>
+    <li><a href="#weather">Weather Stations</a></li>
+    <li><a href="#isobars">Isobars</a></li>
+    <li><a href="#webcams">Webcams &amp; AI Wave Estimate</a></li>
+    <li><a href="#depth">Depth Contours</a></li>
+    <li><a href="#route">Route Planning</a></li>
+    <li><a href="#tracking">Tracking</a></li>
+    <li><a href="#leadline">Lead Line &amp; Sweep Lines</a></li>
+    <li><a href="#anchor">Anchor Watch</a></li>
+    <li><a href="#logbook">Digital Logbook</a></li>
+    <li><a href="#gps">GPS &amp; SOG/COG</a></li>
+    <li><a href="#wxhere">Weather at Location (WX Here)</a></li>
+    <li><a href="#offline">Offline Use</a></li>
+    <li><a href="#sharing">Sharing &amp; Import/Export</a></li>
+    <li><a href="#ios">iOS Notes</a></li>
+  </ol>
+</div>
+
+<!-- 1. OVERVIEW -->
+<section id="overview">
+  <h2>1. Overview</h2>
+  <p>Marine Nav Assist provides real-time wind, wave, and pressure conditions along the Israeli Mediterranean coastline. It covers 17 coastal stations from Rosh HaNikra in the north to Ashkelon in the south.</p>
+  <p>The app runs entirely in your browser — no account or backend required. All data comes from free public APIs (Open-Meteo for weather, EMODnet for bathymetry).</p>
+  <h3>Quick Start</h3>
+  <ol>
+    <li>Open the app — the map loads centered on the Israeli coast.</li>
+    <li>Weather data auto-fetches for all 17 stations (wind arrows and wave badges appear).</li>
+    <li>Tap any wind arrow to see detailed wind, wave, and swell data.</li>
+    <li>Use the floating menu buttons (left edge) to open panels: Weather, Route, Tracking, Anchor, Logbook.</li>
+  </ol>
+</section>
+
+<!-- 2. MAP & LAYERS -->
+<section id="map">
+  <h2>2. Map &amp; Layers</h2>
+  <h3>Base Maps</h3>
+  <p>Use the layer control (bottom-right) to switch between:</p>
+  <ul>
+    <li><strong>Standard Map</strong> — CartoDB Positron (default, clean style)</li>
+    <li><strong>Sea Depth (EMODnet)</strong> — EU bathymetry tiles</li>
+    <li><strong>Sea Depth (GEBCO)</strong> — global bathymetry tiles</li>
+  </ul>
+
+  <h3>Overlay Layers</h3>
+  <p>Toggle these independently:</p>
+  <ul>
+    <li><strong>Wind Arrows</strong> — colored arrows showing wind direction and speed at each station</li>
+    <li><strong>Wave Heights</strong> — colored badges showing wave height west of each station</li>
+    <li><strong>Isobars / Isobar Labels</strong> — atmospheric pressure contour lines</li>
+    <li><strong>Depth Contours / Depth Labels</strong> — sea floor depth lines</li>
+    <li><strong>AI Wave Estimate</strong> — Gemini Vision wave analysis badges</li>
+    <li><strong>Route</strong> — your planned route</li>
+    <li><strong>My Location</strong> — GPS position marker</li>
+    <li><strong>Track</strong> — recorded GPS breadcrumb trail</li>
+    <li><strong>Legend</strong> — color scale reference</li>
+  </ul>
+
+  <h3>Map Controls</h3>
+  <ul>
+    <li><strong>Search</strong> (top-right) — search for a place name to pan the map</li>
+    <li><strong>Locate</strong> (top-left, crosshair icon) — center map on your GPS position</li>
+    <li><strong>Zoom</strong> — pinch on touch, scroll wheel on desktop, or +/- buttons</li>
+  </ul>
+</section>
+
+<!-- 3. WEATHER STATIONS -->
+<section id="weather">
+  <h2>3. Weather Stations</h2>
+  <p>17 stations along the coast display real-time forecasts:</p>
+  <p style="font-size:12px;color:#666">Rosh HaNikra &bull; Nahariya &bull; Akko &bull; Haifa &bull; Atlit &bull; Dor &bull; Caesarea &bull; Hadera &bull; Netanya &bull; Herzliya &bull; Tel Aviv &bull; Jaffa &bull; Bat Yam &bull; Rishon LeZion &bull; Palmachim &bull; Ashdod &bull; Ashkelon</p>
+
+  <h3>What You See on the Map</h3>
+  <ul>
+    <li><strong>Wind arrows</strong> — colored by speed, pointing in the wind direction</li>
+    <li><strong>Speed label</strong> — wind speed in knots below each arrow</li>
+    <li><strong>Wave badge</strong> — colored box showing wave height (m), offset seaward</li>
+  </ul>
+
+  <h3>Station Popup</h3>
+  <p>Tap a wind arrow to see:</p>
+  <ul>
+    <li><strong>Wind</strong> — speed (kts), compass direction, gusts</li>
+    <li><strong>Pressure</strong> — barometric pressure (hPa)</li>
+    <li><strong>Waves</strong> — height (m), direction, period (s)</li>
+    <li><strong>Swell</strong> — height, direction, period (if present)</li>
+    <li><strong>AI Wave Estimate</strong> — if Gemini API key is configured</li>
+    <li><strong>Webcam links</strong> — for stations with cameras</li>
+  </ul>
+
+  <h3>Auto-Refresh</h3>
+  <p>Open the <span class="key">Wind &amp; Waves</span> panel to configure:</p>
+  <ul>
+    <li><strong>Refresh interval</strong> — default 5 minutes</li>
+    <li><strong>Refresh Now</strong> — force immediate update</li>
+    <li><strong>Pause</strong> — temporarily stop auto-refresh</li>
+  </ul>
+</section>
+
+<!-- 4. ISOBARS -->
+<section id="isobars">
+  <h2>4. Isobars</h2>
+  <p>Isobars show atmospheric pressure patterns across the region. Enable the <span class="key">Isobars</span> layer to display them.</p>
+  <ul>
+    <li><strong>Thick lines</strong> — every 4 hPa</li>
+    <li><strong>Thin lines</strong> — every 1 hPa</li>
+    <li><strong>Labels</strong> — enable <span class="key">Isobar Labels</span> to show pressure values</li>
+  </ul>
+  <p>Isobars are computed from a 12&times;12 pressure grid covering the eastern Mediterranean (30.5&deg;N&ndash;34.0&deg;N, 33.0&deg;E&ndash;37.0&deg;E).</p>
+</section>
+
+<!-- 5. WEBCAMS & AI -->
+<section id="webcams">
+  <h2>5. Webcams &amp; AI Wave Estimate</h2>
+  <h3>Viewing Webcams</h3>
+  <ol>
+    <li>Tap a wind arrow at a station with cameras.</li>
+    <li>In the popup, look for webcam links (e.g., "Bat Galim", "Surf Club").</li>
+    <li>Tap a link to open the live feed in a modal.</li>
+    <li>Close with the X button or tap outside.</li>
+  </ol>
+
+  <h3>AI Wave Estimate</h3>
+  <p>Uses Google Gemini Vision to analyze webcam images and estimate wave conditions.</p>
+  <ol>
+    <li>Open the <span class="key">Wind &amp; Waves</span> panel.</li>
+    <li>Enter your Gemini API key in the "Gemini API Key" field.</li>
+    <li>The app will analyze available webcam images automatically.</li>
+    <li>Results appear in station popups as estimated wave height with confidence level.</li>
+  </ol>
+  <div class="note">AI estimates supplement — not replace — official forecast data. Confidence varies by lighting and camera quality.</div>
+</section>
+
+<!-- 6. DEPTH CONTOURS -->
+<section id="depth">
+  <h2>6. Depth Contours</h2>
+  <p>Enable the <span class="key">Depth Contours</span> layer to see sea floor depth lines on the map.</p>
+  <ul>
+    <li>Contours load dynamically as you pan and zoom.</li>
+    <li>Enable <span class="key">Depth Labels</span> to see depth values in meters.</li>
+    <li>Data source: EMODnet high-resolution bathymetry.</li>
+  </ul>
+  <p>For visual depth shading, switch to the <strong>Sea Depth (EMODnet)</strong> or <strong>Sea Depth (GEBCO)</strong> base map.</p>
+</section>
+
+<!-- 7. ROUTE PLANNING -->
+<section id="route">
+  <h2>7. Route Planning</h2>
+
+  <h3>Vessel Parameters</h3>
+  <p>Set these before planning a route — they affect depth clearance checks:</p>
+  <table>
+    <tr><th>Parameter</th><th>Default</th><th>Purpose</th></tr>
+    <tr><td>Vessel Type</td><td>Motor</td><td>Motor or Sail</td></tr>
+    <tr><td>Speed</td><td>6 kts</td><td>Used for ETA calculation</td></tr>
+    <tr><td>LOA</td><td>10 m</td><td>Length Overall</td></tr>
+    <tr><td>Beam</td><td>3 m</td><td>Width</td></tr>
+    <tr><td>Draft</td><td>1.5 m</td><td>Depth below waterline</td></tr>
+    <tr><td>Safety Margin</td><td>2 m</td><td>Extra clearance buffer</td></tr>
+  </table>
+
+  <h3>Drawing a Route</h3>
+  <ol>
+    <li>Tap <span class="key">Draw Route</span> — button turns orange.</li>
+    <li>Tap the map to place waypoints (up to 50).</li>
+    <li>Waypoints connect with a blue line showing distances.</li>
+    <li>Tap <span class="key">Stop Drawing</span> to finish.</li>
+  </ol>
+
+  <h3>Route Controls</h3>
+  <dl>
+    <dt>Clear</dt><dd>Remove all waypoints and start fresh.</dd>
+    <dt>Auto-Correct Route</dt><dd>Smooth the path and check depth clearance. Flags shallow segments.</dd>
+    <dt>Show Hazards</dt><dd>Display hazard circles at segments shallower than your draft + safety margin.</dd>
+    <dt>Export GPX</dt><dd>Download route as a GPX file.</dd>
+    <dt>Import GPX</dt><dd>Load a route from a GPX file.</dd>
+    <dt>Save Route</dt><dd>Save to device storage (IndexedDB) for later use.</dd>
+    <dt>Save for Offline</dt><dd>Download map tiles along the route for offline navigation.</dd>
+  </dl>
+
+  <h3>Depth Hazards</h3>
+  <p>When <em>Check depth clearance</em> is enabled, Auto-Correct identifies segments where the sea floor is shallower than your required clearance (draft + safety margin). Hazard circles appear on the map — tap one to see the depth vs. your vessel requirements.</p>
+
+  <h3>Saved Routes</h3>
+  <p>Saved routes appear below the route controls. Each shows:</p>
+  <ul>
+    <li>Route name (tap to load)</li>
+    <li>Storage size and age</li>
+    <li>Share button — export as GPX</li>
+    <li>Delete button</li>
+  </ul>
+</section>
+
+<!-- 8. TRACKING -->
+<section id="tracking">
+  <h2>8. Tracking</h2>
+  <p>Records your GPS position as you move, drawing a breadcrumb trail on the map.</p>
+
+  <h3>Recording a Track</h3>
+  <ol>
+    <li>Open the <span class="key">Tracking</span> panel.</li>
+    <li>Optionally enter a track name.</li>
+    <li>Tap <span class="key">Start</span> — GPS tracking begins, green trail appears on map.</li>
+    <li>Tap <span class="key">Mark Position</span> to drop a numbered pin at your current location.</li>
+    <li>Tap <span class="key">Stop</span> to pause recording.</li>
+  </ol>
+
+  <h3>Track Controls</h3>
+  <dl>
+    <dt>Clear</dt><dd>Erase all track points and pins.</dd>
+    <dt>Export GPX</dt><dd>Download track as a GPX file (includes pins as waypoints).</dd>
+    <dt>Import GPX</dt><dd>Load a previously exported track or route from a GPX file.</dd>
+    <dt>Save as Route</dt><dd>Convert the track to a route (simplified with 50m tolerance) and save to device storage.</dd>
+  </dl>
+</section>
+
+<!-- 9. LEAD LINE & SWEEP LINES -->
+<section id="leadline">
+  <h2>9. Lead Line &amp; Sweep Lines</h2>
+
+  <h3>Lead Line</h3>
+  <p>A dashed blue line extending ahead of your boat in the direction you're heading.</p>
+  <ul>
+    <li>Set the length (0&ndash;500 nm) in the <span class="key">Lead line</span> field in the Tracking panel.</li>
+    <li>Set to 0 to hide it.</li>
+    <li>Updates in real-time as your heading changes.</li>
+  </ul>
+
+  <h3>Sweep Lines</h3>
+  <p>Automatically shown when the lead line is active and you have a valid heading. They display your heading range over the last 15 minutes:</p>
+  <table>
+    <tr><th>Line</th><th>Color</th><th>Meaning</th></tr>
+    <tr><td>Left extreme</td><td style="color:#D32F2F">Red</td><td>Farthest counter-clockwise heading</td></tr>
+    <tr><td>Right extreme</td><td style="color:#388E3C">Green</td><td>Farthest clockwise heading</td></tr>
+    <tr><td>Average</td><td>Black</td><td>Distance-weighted average heading</td></tr>
+  </table>
+  <div class="tip">The average (black) line weights headings by distance covered, so directions where you made good speed contribute more than slow drifting.</div>
+</section>
+
+<!-- 10. ANCHOR WATCH -->
+<section id="anchor">
+  <h2>10. Anchor Watch</h2>
+  <p>Monitors your position and alerts you if you drift beyond a set radius from your anchor point.</p>
+
+  <h3>Setting the Anchor</h3>
+  <ol>
+    <li>Open the <span class="key">Anchor Watch</span> panel.</li>
+    <li>Set the alert radius (5&ndash;500 m, default 30 m).</li>
+    <li>Tap <span class="key">Drop Anchor</span> — uses your current GPS position.</li>
+    <li>An anchor marker and radius circle appear on the map.</li>
+  </ol>
+
+  <h3>Monitoring</h3>
+  <ul>
+    <li><strong>Green status</strong> — within safe radius, showing current distance.</li>
+    <li><strong>Red / DRIFT ALARM</strong> — you've exceeded the radius. Beep and vibration alert.</li>
+  </ul>
+  <p>Tap <span class="key">Clear</span> to remove the anchor and stop monitoring.</p>
+  <div class="note">iOS Safari does not support vibration. The audible beep alarm will still work if audio has been enabled by a prior tap.</div>
+</section>
+
+<!-- 11. DIGITAL LOGBOOK -->
+<section id="logbook">
+  <h2>11. Digital Logbook</h2>
+  <p>A traditional maritime logbook in digital form. Records voyage details and periodic entries with navigation, engine, and weather data.</p>
+
+  <h3>Starting a New Log</h3>
+  <ol>
+    <li>Open the <span class="key">Logbook</span> panel.</li>
+    <li>Tap <span class="key">New Log</span>.</li>
+    <li>Enter captain name and departure details.</li>
+    <li>The first entry form opens automatically.</li>
+  </ol>
+
+  <h3>Adding Entries</h3>
+  <p>Tap <span class="key">Add Entry</span> to record a log entry. Fields include:</p>
+  <ul>
+    <li><strong>Navigation:</strong> Date, Time, Position, SOG, COG (auto-filled from GPS)</li>
+    <li><strong>Engine:</strong> RPM, Temperature (manual)</li>
+    <li><strong>Weather:</strong> Wind Speed, Wind Dir, Sea State, Pressure, Visibility, Weather conditions</li>
+    <li><strong>Comments:</strong> Free text</li>
+  </ul>
+  <div class="tip">When <em>WX Here</em> is active, wind speed, wind direction, and barometric pressure auto-fill and are marked "AUTO". You can still override them manually.</div>
+
+  <h3>Closing a Log</h3>
+  <p>Tap <span class="key">Close Log</span> when the voyage is complete. You'll be prompted for the arrival location. Closed logs move to the Saved Logs list.</p>
+
+  <h3>Exporting</h3>
+  <p>Tap <span class="key">Export</span> (active log) or the share button on a saved log to download/share as CSV. The CSV includes all entries with full headers, compatible with Excel.</p>
+
+  <h3>Saved Logs</h3>
+  <p>Listed below the active log controls. Each shows date, captain name, entry count, and status (open/closed). Tap to view or export; use the share or delete buttons.</p>
+</section>
+
+<!-- 12. GPS & SOG/COG -->
+<section id="gps">
+  <h2>12. GPS &amp; SOG/COG Display</h2>
+  <p>When GPS is active, the top center of the screen shows:</p>
+  <ul>
+    <li><strong>SOG</strong> — Speed Over Ground in knots</li>
+    <li><strong>COG</strong> — Course Over Ground in degrees + compass direction</li>
+  </ul>
+  <p>Your position appears on the map as:</p>
+  <ul>
+    <li><strong>Moving:</strong> Blue arrow pointing in your heading direction</li>
+    <li><strong>Stationary:</strong> Blue circle dot</li>
+    <li><strong>Accuracy circle:</strong> Light blue circle showing GPS precision</li>
+  </ul>
+  <p>Tap the <strong>locate button</strong> (crosshair icon, top-left) to center the map on your position.</p>
+  <div class="note">GPS requires location permission from your browser/device. HTTPS is required for geolocation on most browsers.</div>
+</section>
+
+<!-- 13. WX HERE -->
+<section id="wxhere">
+  <h2>13. Weather at Location (WX Here)</h2>
+  <p>Shows weather conditions at your exact GPS position (not just the nearest station).</p>
+  <ol>
+    <li>The <span class="key">WX</span> toggle appears near the SOG/COG display when GPS is active.</li>
+    <li>Enable it to fetch wind, wave, and temperature data for your location.</li>
+    <li>Data auto-refreshes as you move (cached for 10 min or 5 km).</li>
+  </ol>
+  <p>Displayed values:</p>
+  <ul>
+    <li><strong>W</strong> — Wind speed (kts)</li>
+    <li><strong>Wv</strong> — Wave height (m)</li>
+    <li><strong>Temp</strong> — Air temperature (&deg;C)</li>
+  </ul>
+  <p>When active, these values auto-populate logbook entries (marked "AUTO").</p>
+</section>
+
+<!-- 14. OFFLINE USE -->
+<section id="offline">
+  <h2>14. Offline Use</h2>
+  <p>Marine Nav Assist works offline as a Progressive Web App (PWA). Weather data and map tiles can be cached for use without internet.</p>
+
+  <h3>Installing as PWA</h3>
+  <ul>
+    <li><strong>iOS Safari:</strong> Tap Share &rarr; Add to Home Screen</li>
+    <li><strong>Android Chrome:</strong> Tap menu &rarr; Install App / Add to Home Screen</li>
+    <li><strong>Android APK:</strong> Install the APK directly</li>
+  </ul>
+
+  <h3>Downloading Map Tiles</h3>
+  <ol>
+    <li>Pan and zoom the map to the area you want.</li>
+    <li>Tap the <strong>download icon</strong> (bottom-left of map).</li>
+    <li>Set zoom range (default 8&ndash;15). Higher zoom = more detail, more storage.</li>
+    <li>Tap <span class="key">Download</span> — progress bar shows completion.</li>
+    <li>Downloaded tiles are cached for offline viewing.</li>
+  </ol>
+
+  <h3>Saved Routes</h3>
+  <p>Routes saved via <span class="key">Save Route</span> persist in device storage (IndexedDB) and can be loaded offline. Use <span class="key">Save for Offline</span> to also download map tiles covering the route area.</p>
+
+  <h3>Saved Logs</h3>
+  <p>All logbook data is stored locally in IndexedDB and available offline.</p>
+</section>
+
+<!-- 15. SHARING & IMPORT/EXPORT -->
+<section id="sharing">
+  <h2>15. Sharing &amp; Import/Export</h2>
+
+  <h3>Export Formats</h3>
+  <table>
+    <tr><th>Data</th><th>Format</th><th>How</th></tr>
+    <tr><td>Routes</td><td>GPX</td><td>Export GPX button in Route panel, or share button on saved routes</td></tr>
+    <tr><td>Tracks</td><td>GPX</td><td>Export GPX button in Tracking panel</td></tr>
+    <tr><td>Logs</td><td>CSV</td><td>Export button on active log, or share button on saved logs</td></tr>
+  </table>
+
+  <h3>Import</h3>
+  <ul>
+    <li><strong>Import route GPX:</strong> <span class="key">Import GPX</span> button in Route Planning panel. Accepts both route (&lt;rte&gt;) and track (&lt;trk&gt;) formats.</li>
+    <li><strong>Import track GPX:</strong> <span class="key">Import GPX</span> button in Tracking panel. Loads track points and waypoint pins.</li>
+  </ul>
+
+  <h3>Sharing on Mobile</h3>
+  <p>On mobile devices, export buttons open the native share sheet (WhatsApp, Email, Files, etc.). On desktop browsers, files are downloaded directly.</p>
+</section>
+
+<!-- 16. iOS NOTES -->
+<section id="ios">
+  <h2>16. iOS Notes</h2>
+  <ul>
+    <li><strong>Vibration:</strong> <code>navigator.vibrate()</code> is not supported in Safari. Anchor Watch alarm will beep but not vibrate.</li>
+    <li><strong>Audio:</strong> Sound must be unlocked by a tap gesture before alarms can play. Tap any button in the app to enable audio.</li>
+    <li><strong>PWA:</strong> Add to Home Screen via Safari's Share menu for the best experience.</li>
+  </ul>
+</section>
+
+</div><!-- .container -->
+
+</body>
+</html>

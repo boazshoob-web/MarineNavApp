@@ -6,7 +6,7 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const WWW = path.join(ROOT, 'www');
 
-const FILES = ['index.html', 'sw.js', 'manifest.json'];
+const FILES = ['index.html', 'sw.js', 'manifest.json', 'guide.html'];
 const DIRS = ['icons'];
 
 // Ensure www/ exists

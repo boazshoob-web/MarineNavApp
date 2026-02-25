@@ -571,6 +571,15 @@
         .screen-on-ctrl.active { background: #e3f2fd; }
         .screen-on-ctrl.active svg { stroke: #1565c0; }
 
+        /* Help button */
+        .help-ctrl {
+            background: #fff; border-radius: 6px; box-shadow: 0 1px 5px rgba(0,0,0,0.25);
+            cursor: pointer; width: 34px; height: 34px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .help-ctrl:hover { background: #f0f0f0; }
+        .help-ctrl svg { width: 20px; height: 20px; }
+
         /* Offline Map Download */
         .offline-map-ctrl {
             background: #fff; border-radius: 6px; box-shadow: 0 1px 5px rgba(0,0,0,0.25);
@@ -4435,6 +4444,25 @@
             }
         });
         map.addControl(new ScreenOnControl());
+
+        // ---- Help / User Guide button ----
+        var HelpControl = L.Control.extend({
+            options: { position: 'bottomleft' },
+            onAdd: function () {
+                var div = L.DomUtil.create('div', 'leaflet-bar help-ctrl');
+                div.title = 'User Guide';
+                div.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#1976D2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                    '<circle cx="12" cy="12" r="10"/>' +
+                    '<path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>' +
+                    '<line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+                L.DomEvent.disableClickPropagation(div);
+                div.addEventListener('click', function () {
+                    window.open('guide.html', '_blank');
+                });
+                return div;
+            }
+        });
+        map.addControl(new HelpControl());
 
         function estimateTileCount(bounds, zMin, zMax) {
             var total = 0;
