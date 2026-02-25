@@ -922,6 +922,21 @@
     </style>
 </head>
 <body>
+    <!-- Disclaimer overlay (shown once) -->
+    <div id="disclaimerOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:99999;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:12px;padding:24px;max-width:420px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.3);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+            <h2 style="margin:0 0 16px;font-size:18px;color:#333;text-align:center;">Disclaimer</h2>
+            <div style="font-size:13px;color:#444;line-height:1.6;">
+                <p style="margin:0 0 12px;">Marine Nav Assist is a <strong>personal, non-commercial project</strong>. It has not been tested, certified, or approved for commercial, professional, or safety-critical use.</p>
+                <p style="margin:0 0 12px;">All weather, wave, and bathymetric data is sourced from free, publicly available APIs (Open-Meteo, EMODnet) and depends entirely on their availability, accuracy, and continued operation. Data may be delayed, incomplete, or inaccurate.</p>
+                <p style="margin:0 0 12px;"><strong>This app is not a substitute for official marine forecasts, nautical charts, or proper navigation equipment.</strong></p>
+                <p style="margin:0 0 12px;">The developer assumes <strong>no responsibility or liability</strong> for any loss, damage, injury, or harm to persons or property arising from the use of this application or reliance on the information it provides.</p>
+                <p style="margin:0;">By using this app, you acknowledge that you do so <strong>entirely at your own risk</strong>.</p>
+            </div>
+            <button id="disclaimerAccept" style="display:block;width:100%;margin-top:20px;padding:12px;background:#1976D2;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;">I Understand &amp; Accept</button>
+        </div>
+    </div>
+
     <div id="map"></div>
 
     <!-- Floating Menu -->
@@ -1435,6 +1450,18 @@
     <script>
     (function () {
         'use strict';
+
+        // ============================================================
+        // DISCLAIMER (one-time acceptance)
+        // ============================================================
+        if (!localStorage.getItem('disclaimerAccepted')) {
+            var overlay = document.getElementById('disclaimerOverlay');
+            overlay.style.display = 'flex';
+            document.getElementById('disclaimerAccept').addEventListener('click', function () {
+                localStorage.setItem('disclaimerAccepted', '1');
+                overlay.style.display = 'none';
+            });
+        }
 
         // ============================================================
         // CONFIGURATION
