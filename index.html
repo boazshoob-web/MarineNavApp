@@ -407,6 +407,11 @@
             font-size: 13px; padding: 0 2px; line-height: 1;
         }
         .offline-route-item .route-delete:hover { color: #e53935; }
+        .offline-route-item .route-share {
+            background: none; border: none; color: #1976D2; cursor: pointer;
+            font-size: 14px; padding: 0 2px; line-height: 1;
+        }
+        .offline-route-item .route-share:hover { color: #1565C0; }
         .save-progress { font-size: 10px; color: #555; margin-top: 4px; }
         .save-progress .progress-bar {
             height: 4px; background: #e0e0e0; border-radius: 2px; margin-top: 3px; overflow: hidden;
@@ -661,6 +666,8 @@
         .log-info { font-size: 10px; color: #999; white-space: nowrap; }
         .log-delete { background: none; border: none; color: #999; cursor: pointer; font-size: 16px; padding: 0 4px; line-height: 1; }
         .log-delete:hover { color: #e53935; }
+        .log-share { background: none; border: none; color: #1976D2; cursor: pointer; font-size: 15px; padding: 0 4px; line-height: 1; }
+        .log-share:hover { color: #1565C0; }
 
         /* Log Action Chooser */
         .log-action-overlay {
@@ -3676,6 +3683,48 @@
             setRouteStatus('GPX file exported.', 'ok');
         }
 
+        function exportSavedRouteGPX(routeId) {
+            dbGetStore(STORE_ROUTES, routeId).then(function (r) {
+                if (!r || !r.waypoints || r.waypoints.length < 2) return;
+                var wps = r.waypoints;
+                var params = r.params || {};
+                var routeName = r.name || 'Route';
+                var ts = r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString();
+
+                var xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+                    '<gpx version="1.1" creator="Maritime navigation assist App"\n' +
+                    '  xmlns="http://www.topografix.com/GPX/1/1"\n' +
+                    '  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n' +
+                    '  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">\n' +
+                    '  <metadata>\n' +
+                    '    <name>' + escapeXml(routeName) + '</name>\n' +
+                    '    <desc>Vessel: ' + escapeXml(params.vesselType || '') + ', LOA: ' + (params.loa || '') + 'm, Beam: ' + (params.beam || '') +
+                    'm, Draft: ' + (params.draft || '') + 'm, Speed: ' + (params.speed || '') + 'kts</desc>\n' +
+                    '    <time>' + ts + '</time>\n' +
+                    '  </metadata>\n';
+
+                wps.forEach(function (wp, i) {
+                    var name = i === 0 ? 'START' : i === wps.length - 1 ? 'END' : 'WP' + (i + 1);
+                    xml += '  <wpt lat="' + wp.lat.toFixed(7) + '" lon="' + wp.lng.toFixed(7) + '">\n' +
+                        '    <name>' + name + '</name>\n' +
+                        '  </wpt>\n';
+                });
+
+                xml += '  <rte>\n' +
+                    '    <name>' + escapeXml(routeName) + '</name>\n';
+                wps.forEach(function (wp, i) {
+                    var name = i === 0 ? 'START' : i === wps.length - 1 ? 'END' : 'WP' + (i + 1);
+                    xml += '    <rtept lat="' + wp.lat.toFixed(7) + '" lon="' + wp.lng.toFixed(7) + '">\n' +
+                        '      <name>' + name + '</name>\n' +
+                        '    </rtept>\n';
+                });
+                xml += '  </rte>\n</gpx>\n';
+
+                downloadOrShareGPX(xml, routeName.replace(/[\/\\:*?"<>|]/g, '-') + '.gpx');
+            });
+        }
+        window.exportSavedRouteGPX = exportSavedRouteGPX;
+
         function escapeXml(s) {
             return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
@@ -3687,8 +3736,8 @@
 
         function downloadOrShareGPX(xml, filename) {
             var blob = new Blob([xml], { type: 'application/gpx+xml' });
-            // In PWA standalone mode (especially iOS), use Web Share API if available
-            if (isStandalonePWA() && navigator.share && navigator.canShare) {
+            // Use Web Share API on mobile (PWA, Capacitor, or mobile browser)
+            if (navigator.share && navigator.canShare) {
                 var file = new File([blob], filename, { type: 'application/gpx+xml' });
                 if (navigator.canShare({ files: [file] })) {
                     navigator.share({ files: [file], title: filename }).catch(function (e) {
@@ -4244,6 +4293,7 @@
                             '<span class="route-name" onclick="loadOfflineRoute(\'' + r.id + '\')" title="Click to load">' +
                             r.name + '</span>' +
                             '<span class="route-size">' + sizeText + ' &middot; ' + age + '</span>' +
+                            '<button class="route-share" onclick="exportSavedRouteGPX(\'' + r.id + '\')" title="Share GPX">&#8682;</button>' +
                             '<button class="route-delete" onclick="deleteOfflineRoute(\'' + r.id + '\')" title="Delete">&times;</button>';
                         list.appendChild(item);
                     });
@@ -6169,8 +6219,8 @@
                 var blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8' });
                 var filename = 'logbook_' + (depDT ? depDT.toISOString().slice(0, 10) : 'unknown') + '.csv';
 
-                // Use share API in PWA mode, download otherwise
-                if (isStandalonePWA() && navigator.share && navigator.canShare) {
+                // Use Web Share API on mobile (PWA, Capacitor, or mobile browser)
+                if (navigator.share && navigator.canShare) {
                     var file = new File([blob], filename, { type: 'text/csv' });
                     if (navigator.canShare({ files: [file] })) {
                         navigator.share({ files: [file], title: filename }).catch(function (e) {
@@ -6353,6 +6403,7 @@
                             '<span class="log-name" onclick="openLogAction(\'' + log.id + '\')" title="View or export">' +
                             displayName + '</span>' +
                             '<span class="log-info">' + info + '</span>' +
+                            '<button class="log-share" onclick="exportLogCSV(\'' + log.id + '\')" title="Share CSV">&#8682;</button>' +
                             '<button class="log-delete" onclick="deleteLog(\'' + log.id + '\')" title="Delete">&times;</button>';
                         list.appendChild(item);
                     });
