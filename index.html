@@ -4780,6 +4780,7 @@
         // Compute sweep angles from heading history over the last 15 minutes.
         // Returns { left: deg, right: deg, avg: deg } or null if insufficient data.
         // "left" = farthest counter-clockwise, "right" = farthest clockwise relative to the current heading.
+        // Average is distance-weighted (speed × time) so headings with more ground covered dominate.
         function computeSweepAngles() {
             var now = Date.now();
             var cutoff = now - 15 * 60 * 1000;
@@ -4799,16 +4800,18 @@
                 var diff = angleDiff(h, ref);
                 if (diff < maxLeft) maxLeft = diff;
                 if (diff > maxRight) maxRight = diff;
-                // Time-weighted: weight = duration this heading was held (ms)
+                // Distance-weighted: weight = speed × duration (proportional to distance covered)
                 var dt;
                 if (i < gpsHeadingHistory.length - 1) {
                     dt = gpsHeadingHistory[i + 1].time - gpsHeadingHistory[i].time;
                 } else {
                     dt = now - gpsHeadingHistory[i].time; // last sample held until now
                 }
+                var spd = gpsHeadingHistory[i].speed || 0;
+                var w = spd * dt;
                 var rad = h * Math.PI / 180;
-                sinSum += Math.sin(rad) * dt;
-                cosSum += Math.cos(rad) * dt;
+                sinSum += Math.sin(rad) * w;
+                cosSum += Math.cos(rad) * w;
             }
 
             var avgHeading = (Math.atan2(sinSum, cosSum) * 180 / Math.PI + 360) % 360;
@@ -4959,7 +4962,7 @@
 
             // Record heading for sweep lines (only when moving with valid heading)
             if (moving && gpsHasHeading) {
-                gpsHeadingHistory.push({ time: Date.now(), heading: gpsHeading });
+                gpsHeadingHistory.push({ time: Date.now(), heading: gpsHeading, speed: gpsSogKts });
             }
 
             updateLeadLine(lat, lon);
