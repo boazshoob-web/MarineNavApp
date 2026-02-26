@@ -588,6 +588,25 @@
         }
         .offline-map-ctrl:hover { background: #f0f0f0; }
         .offline-map-ctrl svg { width: 20px; height: 20px; }
+
+        /* Dark map toggle */
+        .dark-map-ctrl {
+            background: #fff; border-radius: 6px; box-shadow: 0 1px 5px rgba(0,0,0,0.25);
+            cursor: pointer; width: 34px; height: 34px;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s;
+        }
+        .dark-map-ctrl:hover { background: #f0f0f0; }
+        .dark-map-ctrl svg { width: 20px; height: 20px; }
+        .dark-map-ctrl.active { background: #1a2744; }
+        .dark-map-ctrl.active svg { stroke: #90caf9; }
+
+        /* Map tile dark filter */
+        .leaflet-tile-pane { transition: filter 0.4s ease; }
+        .leaflet-tile-pane.dark-tiles {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+        }
+
         .dl-area-dialog {
             display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0,0,0,0.4); z-index: 10000;
@@ -4492,6 +4511,32 @@
             }
         });
         map.addControl(new HelpControl());
+
+        // ---- Dark Map Toggle ----
+        var _darkMap = localStorage.getItem('darkMap') === '1';
+        var DarkMapControl = L.Control.extend({
+            options: { position: 'bottomleft' },
+            onAdd: function () {
+                var div = L.DomUtil.create('div', 'leaflet-bar dark-map-ctrl');
+                div.title = _darkMap ? 'Switch to light map' : 'Switch to dark map';
+                div.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                    '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+                if (_darkMap) {
+                    div.classList.add('active');
+                    document.querySelector('.leaflet-tile-pane').classList.add('dark-tiles');
+                }
+                L.DomEvent.disableClickPropagation(div);
+                div.addEventListener('click', function () {
+                    _darkMap = !_darkMap;
+                    div.classList.toggle('active', _darkMap);
+                    div.title = _darkMap ? 'Switch to light map' : 'Switch to dark map';
+                    document.querySelector('.leaflet-tile-pane').classList.toggle('dark-tiles', _darkMap);
+                    localStorage.setItem('darkMap', _darkMap ? '1' : '0');
+                });
+                return div;
+            }
+        });
+        map.addControl(new DarkMapControl());
 
         function estimateTileCount(bounds, zMin, zMax) {
             var total = 0;
