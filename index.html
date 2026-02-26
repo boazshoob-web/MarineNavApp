@@ -3179,15 +3179,16 @@
                 var midLat = (a.lat + b.lat) / 2;
                 var midLng = (a.lng + b.lng) / 2;
 
+                var course = Math.round(bearingDeg(a.lat, a.lng, b.lat, b.lng));
                 var label = L.marker([midLat, midLng], {
                     interactive: false,
                     keyboard: false,
                     icon: L.divIcon({
                         className: 'route-label',
-                        iconSize: [80, 24],
-                        iconAnchor: [40, 12],
+                        iconSize: [110, 24],
+                        iconAnchor: [55, 12],
                         html: '<div style="background:rgba(255,255,255,0.95);border:1.5px solid #0066ff;border-radius:4px;padding:2px 7px;font-size:12px;font-weight:700;color:#0050cc;white-space:nowrap;pointer-events:none;text-align:center;line-height:18px;box-shadow:0 1px 4px rgba(0,0,0,0.18)">' +
-                            nm.toFixed(1) + ' nm</div>'
+                            nm.toFixed(1) + ' nm · ' + course + '°</div>'
                     })
                 });
                 routeLayer.addLayer(label);
