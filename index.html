@@ -5236,9 +5236,15 @@
         // TRACKING PANEL
         // ============================================================
 
+        // Background Geolocation plugin (Capacitor native only, null in browser/PWA)
+        var BackgroundGeolocation = (window.Capacitor && Capacitor.registerPlugin)
+            ? Capacitor.registerPlugin('BackgroundGeolocation')
+            : null;
+
         var trackState = {
             active: false,
             watchId: null,
+            usesBgGeo: false,   // true when using native BackgroundGeolocation plugin
             positions: [],   // Array of [lat, lon]
             polyline: null,
             pins: [],        // Array of L.Marker
@@ -5370,9 +5376,26 @@
             }
         }
 
+        // Shared callback for track GPS fixes (used by both native and web watchers)
+        function onTrackPosition(lat, lon, accuracy, speed, heading) {
+            var ll = [lat, lon];
+            trackState.positions.push(ll);
+            updateGpsPosition(lat, lon, accuracy, speed, heading);
+
+            if (trackState.polyline) {
+                trackState.polyline.addLatLng(ll);
+            } else {
+                trackState.polyline = L.polyline(trackState.positions, {
+                    color: '#43a047', weight: 3, opacity: 0.8
+                });
+                trackLayer.addLayer(trackState.polyline);
+            }
+            updateTrackButtons();
+        }
+
         function startTrack() {
             if (trackState.active) return;
-            if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
+            if (!navigator.geolocation && !BackgroundGeolocation) { alert('Geolocation not supported'); return; }
 
             // Stop the regular GPS watcher to avoid dual-watcher interference
             // (two watchers both updating gpsPrevPos causes SOG/COG to read 0)
@@ -5383,30 +5406,53 @@
 
             trackState.active = true;
             requestWakeLock();
-            trackState.watchId = navigator.geolocation.watchPosition(
-                function (pos) {
-                    var ll = [pos.coords.latitude, pos.coords.longitude];
-                    trackState.positions.push(ll);
-                    updateGpsPosition(ll[0], ll[1], pos.coords.accuracy, pos.coords.speed, pos.coords.heading);
 
-                    if (trackState.polyline) {
-                        trackState.polyline.addLatLng(ll);
-                    } else {
-                        trackState.polyline = L.polyline(trackState.positions, {
-                            color: '#43a047', weight: 3, opacity: 0.8
-                        });
-                        trackLayer.addLayer(trackState.polyline);
+            if (BackgroundGeolocation) {
+                // Native Capacitor background geolocation — survives app backgrounding
+                trackState.usesBgGeo = true;
+                BackgroundGeolocation.addWatcher(
+                    {
+                        backgroundTitle: 'Marine Nav Assist',
+                        backgroundMessage: 'Recording track\u2026',
+                        distanceFilter: 10,
+                        stale: false,
+                        requestPermissions: true
+                    },
+                    function (location, error) {
+                        if (error) {
+                            if (error.code === 'NOT_AUTHORIZED') {
+                                if (confirm('Background location permission required.\nOpen settings?')) {
+                                    BackgroundGeolocation.openSettings();
+                                }
+                            }
+                            console.warn('BgGeo error:', error.code, error.message);
+                            return;
+                        }
+                        if (location) {
+                            onTrackPosition(location.latitude, location.longitude,
+                                location.accuracy, location.speed, location.bearing);
+                        }
                     }
-                    updateTrackButtons();
-                },
-                function (err) {
-                    console.warn('Track GPS error:', err.message);
-                    var statusEl = document.getElementById('trackStatus');
-                    statusEl.className = 'track-status';
-                    statusEl.textContent = 'GPS error: ' + err.message;
-                },
-                { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
-            );
+                ).then(function (id) {
+                    trackState.watchId = id;
+                });
+            } else {
+                // Web fallback — standard watchPosition (pauses in background)
+                trackState.usesBgGeo = false;
+                trackState.watchId = navigator.geolocation.watchPosition(
+                    function (pos) {
+                        onTrackPosition(pos.coords.latitude, pos.coords.longitude,
+                            pos.coords.accuracy, pos.coords.speed, pos.coords.heading);
+                    },
+                    function (err) {
+                        console.warn('Track GPS error:', err.message);
+                        var statusEl = document.getElementById('trackStatus');
+                        statusEl.className = 'track-status';
+                        statusEl.textContent = 'GPS error: ' + err.message;
+                    },
+                    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+                );
+            }
             updateTrackButtons();
         }
         window.startTrack = startTrack;
@@ -5414,9 +5460,14 @@
         function stopTrack() {
             if (!trackState.active) return;
             if (trackState.watchId !== null) {
-                navigator.geolocation.clearWatch(trackState.watchId);
+                if (trackState.usesBgGeo && BackgroundGeolocation) {
+                    BackgroundGeolocation.removeWatcher({ id: trackState.watchId });
+                } else {
+                    navigator.geolocation.clearWatch(trackState.watchId);
+                }
                 trackState.watchId = null;
             }
+            trackState.usesBgGeo = false;
             trackState.active = false;
             if (!_screenOnManual) releaseWakeLock();
             updateTrackButtons();

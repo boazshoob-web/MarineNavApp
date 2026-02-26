@@ -1,5 +1,8 @@
 {
   "appId": "com.boaz.marinanav",
   "appName": "Marine Nav Assist",
-  "webDir": "www"
+  "webDir": "www",
+  "android": {
+    "useLegacyBridge": true
+  }
 }
