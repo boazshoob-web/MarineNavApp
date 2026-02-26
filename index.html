@@ -607,6 +607,55 @@
             filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
         }
 
+        /* Dark map mode — button overrides */
+        body.dark-map .fm-btn {
+            background: rgba(26, 39, 68, 0.95);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+        body.dark-map .fm-btn:hover { background: rgba(40, 56, 90, 0.95); }
+        body.dark-map .fm-btn svg, body.dark-map .fm-btn svg * { stroke: #90caf9; }
+        body.dark-map .route-btn { background: #283593; color: #fff; }
+        body.dark-map .track-btn { background: #283593; color: #fff; }
+        body.dark-map .route-btn-draw   { background: #0039a6; }
+        body.dark-map .route-btn-draw:hover:not(:disabled) { background: #1a4fc4; }
+        body.dark-map .route-btn-draw.drawing { background: #bf360c; }
+        body.dark-map .route-btn-clear  { background: #1a2744; color: #90caf9; }
+        body.dark-map .route-btn-clear:hover:not(:disabled) { background: #243560; }
+        body.dark-map .route-btn-auto   { background: #00695c; }
+        body.dark-map .route-btn-auto:hover:not(:disabled) { background: #00796b; }
+        body.dark-map .route-btn-export { background: #283593; }
+        body.dark-map .route-btn-export:hover:not(:disabled) { background: #303f9f; }
+        body.dark-map .route-btn-save   { background: #bf360c; }
+        body.dark-map .route-btn-save:hover:not(:disabled) { background: #d84315; }
+        body.dark-map .route-btn-save-route { background: #1b5e20; }
+        body.dark-map .route-btn-save-route:hover:not(:disabled) { background: #2e7d32; }
+        body.dark-map .track-btn-start  { background: #1b5e20; }
+        body.dark-map .track-btn-start:hover:not(:disabled) { background: #2e7d32; }
+        body.dark-map .track-btn-start.active { background: #bf360c; }
+        body.dark-map .track-btn-start.active:hover { background: #d84315; }
+        body.dark-map .track-btn-stop   { background: #7f0000; }
+        body.dark-map .track-btn-stop:hover:not(:disabled) { background: #b71c1c; }
+        body.dark-map .track-btn-mark   { background: #0d3060; }
+        body.dark-map .track-btn-mark:hover:not(:disabled) { background: #1565c0; }
+        body.dark-map .track-btn-clear  { background: #1a2744; color: #90caf9; }
+        body.dark-map .track-btn-clear:hover:not(:disabled) { background: #243560; }
+        body.dark-map .anchor-btn-set   { background: #bf360c; }
+        body.dark-map .anchor-btn-set:hover:not(:disabled) { background: #d84315; }
+        body.dark-map .anchor-btn-set.active { background: #1b5e20; }
+        body.dark-map .anchor-btn-set.active:hover { background: #2e7d32; }
+        body.dark-map .anchor-btn-clear { background: #1a2744; color: #90caf9; }
+        body.dark-map .anchor-btn-clear:hover:not(:disabled) { background: #243560; }
+        body.dark-map .log-btn-new      { background: #1b5e20; }
+        body.dark-map .log-btn-new:hover:not(:disabled) { background: #2e7d32; }
+        body.dark-map .log-btn-entry    { background: #283593; }
+        body.dark-map .log-btn-entry:hover:not(:disabled) { background: #303f9f; }
+        body.dark-map .log-btn-close    { background: #bf360c; }
+        body.dark-map .log-btn-close:hover:not(:disabled) { background: #d84315; }
+        body.dark-map .log-btn-export   { background: #00695c; }
+        body.dark-map .log-btn-export:hover:not(:disabled) { background: #00796b; }
+        body.dark-map .btn-refresh      { background: #1565c0; }
+        body.dark-map .btn-refresh:hover { background: #1976d2; }
+
         .dl-area-dialog {
             display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0,0,0,0.4); z-index: 10000;
@@ -4524,6 +4573,7 @@
                 if (_darkMap) {
                     div.classList.add('active');
                     document.querySelector('.leaflet-tile-pane').classList.add('dark-tiles');
+                    document.body.classList.add('dark-map');
                 }
                 L.DomEvent.disableClickPropagation(div);
                 div.addEventListener('click', function () {
@@ -4531,6 +4581,7 @@
                     div.classList.toggle('active', _darkMap);
                     div.title = _darkMap ? 'Switch to light map' : 'Switch to dark map';
                     document.querySelector('.leaflet-tile-pane').classList.toggle('dark-tiles', _darkMap);
+                    document.body.classList.toggle('dark-map', _darkMap);
                     localStorage.setItem('darkMap', _darkMap ? '1' : '0');
                 });
                 return div;
