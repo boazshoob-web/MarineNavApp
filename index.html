@@ -1447,6 +1447,7 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+    <script src="capacitor.js"></script>
     <script>
     (function () {
         'use strict';
@@ -5237,9 +5238,10 @@
         // ============================================================
 
         // Background Geolocation plugin (Capacitor native only, null in browser/PWA)
-        var BackgroundGeolocation = (window.Capacitor && Capacitor.registerPlugin)
-            ? Capacitor.registerPlugin('BackgroundGeolocation')
-            : null;
+        var BackgroundGeolocation = null;
+        if (window.Capacitor && Capacitor.registerPlugin) {
+            BackgroundGeolocation = Capacitor.registerPlugin('BackgroundGeolocation');
+        }
 
         var trackState = {
             active: false,
@@ -5425,7 +5427,7 @@
                                     BackgroundGeolocation.openSettings();
                                 }
                             }
-                            console.warn('BgGeo error:', error.code, error.message);
+                            console.warn('BgGeo error:', error.code);
                             return;
                         }
                         if (location) {
@@ -5435,6 +5437,17 @@
                     }
                 ).then(function (id) {
                     trackState.watchId = id;
+                }).catch(function (err) {
+                    console.warn('BgGeo addWatcher failed, falling back to web:', err);
+                    trackState.usesBgGeo = false;
+                    trackState.watchId = navigator.geolocation.watchPosition(
+                        function (pos) {
+                            onTrackPosition(pos.coords.latitude, pos.coords.longitude,
+                                pos.coords.accuracy, pos.coords.speed, pos.coords.heading);
+                        },
+                        function (e) { console.warn('Track GPS error:', e.message); },
+                        { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+                    );
                 });
             } else {
                 // Web fallback — standard watchPosition (pauses in background)
