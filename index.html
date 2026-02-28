@@ -1150,7 +1150,7 @@
                 <button class="route-btn route-btn-hazards" id="rHazardsBtn" onclick="showRouteHazards()" disabled style="display:none">Show Hazards</button>
                 <button class="route-btn route-btn-export" id="rExportBtn" onclick="exportRouteGPX()" disabled>Export GPX</button>
                 <button class="route-btn" onclick="importRouteGPX()" style="background:#5c6bc0;color:#fff">Import GPX</button>
-                <input type="file" id="rImportFile" accept=".gpx,.xml,application/gpx+xml,application/xml,text/xml" style="display:none">
+                <input type="file" id="rImportFile" accept="*/*" style="display:none">
                 <button class="route-btn route-btn-save-route" id="rSaveRouteBtn" onclick="saveRouteLight()" disabled>Save Route</button>
                 <button class="route-btn route-btn-save" id="rSaveOfflineBtn" onclick="saveRouteOffline()" disabled>Save for Offline</button>
             </div>
@@ -1194,7 +1194,7 @@
                 <button class="track-btn track-btn-clear" id="tClearBtn" onclick="clearTrack()" disabled>Clear</button>
                 <button class="track-btn" id="tExportBtn" onclick="exportTrackGPX()" disabled style="background:#5c6bc0;color:#fff">Export GPX</button>
                 <button class="track-btn" onclick="importTrackGPX()" style="background:#5c6bc0;color:#fff">Import GPX</button>
-                <input type="file" id="tImportFile" accept=".gpx,.xml,application/gpx+xml,application/xml,text/xml" style="display:none">
+                <input type="file" id="tImportFile" accept="*/*" style="display:none">
             </div>
             <div class="track-buttons" style="margin-top:4px">
                 <button class="track-btn" id="tSaveRouteBtn" onclick="saveTrackAsRoute()" disabled style="background:#e65100;color:#fff;min-width:100%">Save as Route</button>
