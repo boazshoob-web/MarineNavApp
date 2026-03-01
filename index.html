@@ -904,6 +904,7 @@
             .anchor-panel { top: 60px; right: 5px; min-width: 170px; }
             .log-panel { top: 60px; right: 5px; min-width: 180px; }
             .log-entry-box { width: 96%; max-width: none; padding: 16px; max-height: 85vh; }
+            .leaflet-bottom.leaflet-left { bottom: 20px; }
         }
 
         /* Boat marker */
@@ -1345,7 +1346,20 @@
                 <div class="progress-bar"><div class="progress-fill" id="dlProgressFill" style="width:0%"></div></div>
             </div>
             <div class="dl-storage-info" id="dlStorageInfo"></div>
-            <button onclick="clearAllCache()" style="margin-top:10px;padding:6px 12px;border:1px solid #c62828;border-radius:5px;background:#fff;color:#c62828;font-size:11px;font-weight:600;cursor:pointer;width:100%">Clear All Cached Data</button>
+            <button onclick="openClearCacheDialog()" style="margin-top:10px;padding:6px 12px;border:1px solid #c62828;border-radius:5px;background:#fff;color:#c62828;font-size:11px;font-weight:600;cursor:pointer;width:100%">Clear Cached Data&hellip;</button>
+        </div>
+    </div>
+
+    <!-- Clear Cache Choice Dialog -->
+    <div class="dl-area-dialog" id="clearCacheDialog" onclick="if(event.target===this)closeClearCacheDialog()">
+        <div class="dl-area-box">
+            <h3>Clear Cached Data</h3>
+            <div class="dl-info">Choose what to delete:</div>
+            <div class="dl-area-btns" style="flex-direction:column">
+                <button class="dl-btn-download" onclick="clearMapCacheOnly()" style="background:#e65100">Clear Offline Maps Only</button>
+                <button class="dl-btn-download" onclick="clearAllCache()" style="background:#c62828">Clear All Data (including routes &amp; tracks)</button>
+                <button class="dl-btn-cancel" onclick="closeClearCacheDialog()">Cancel</button>
+            </div>
         </div>
     </div>
 
@@ -4713,9 +4727,65 @@
         document.getElementById('dlZoomMin').addEventListener('change', updateDlEstimate);
         document.getElementById('dlZoomMax').addEventListener('change', updateDlEstimate);
 
-        function clearAllCache() {
-            if (!confirm('This will delete all cached map tiles, weather data, and saved offline routes.\n\nAre you sure?')) return;
+        function openClearCacheDialog() {
+            document.getElementById('clearCacheDialog').style.display = 'flex';
+        }
+        window.openClearCacheDialog = openClearCacheDialog;
 
+        function closeClearCacheDialog() {
+            document.getElementById('clearCacheDialog').style.display = 'none';
+        }
+        window.closeClearCacheDialog = closeClearCacheDialog;
+
+        function clearMapCacheOnly() {
+            closeClearCacheDialog();
+            var promises = [];
+
+            // Clear only the tile cache (not shell/CDN)
+            promises.push(caches.delete('tiles-v1'));
+
+            // Clear IndexedDB tiles + weather stores (keep routes)
+            promises.push(
+                openDB().then(function (db) {
+                    var storeNames = [STORE_TILES, STORE_WEATHER];
+                    return Promise.all(storeNames.map(function (name) {
+                        return new Promise(function (resolve, reject) {
+                            var tx = db.transaction(name, 'readwrite');
+                            tx.objectStore(name).clear();
+                            tx.oncomplete = resolve;
+                            tx.onerror = function () { reject(tx.error); };
+                        });
+                    }));
+                })
+            );
+
+            // Also update route records to reflect tiles are gone
+            promises.push(
+                dbGetAllKeys(STORE_ROUTES).then(function (keys) {
+                    return Promise.all(keys.map(function (key) {
+                        return dbGetStore(STORE_ROUTES, key).then(function (route) {
+                            if (route && route.hasTiles) {
+                                route.hasTiles = false;
+                                route.tileBytes = 0;
+                                return dbPutStore(STORE_ROUTES, key, route);
+                            }
+                        });
+                    }));
+                })
+            );
+
+            Promise.all(promises).then(function () {
+                refreshOfflineRouteList();
+                updateStorageInfo();
+                alert('Offline map data cleared. Your saved routes and tracks are kept.');
+            }).catch(function (err) {
+                alert('Error clearing map cache: ' + err.message);
+            });
+        }
+        window.clearMapCacheOnly = clearMapCacheOnly;
+
+        function clearAllCache() {
+            closeClearCacheDialog();
             var promises = [];
 
             // Clear all Cache API caches (tiles, CDN, shell)
