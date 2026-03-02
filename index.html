@@ -601,21 +601,6 @@
         .dark-map-ctrl.active { background: #1a2744; }
         .dark-map-ctrl.active svg { stroke: #90caf9; }
 
-        /* Heading Up toggle */
-        .heading-up-ctrl {
-            background: #fff; border-radius: 6px; box-shadow: 0 1px 5px rgba(0,0,0,0.25);
-            cursor: pointer; width: 34px; height: 34px;
-            display: flex; align-items: center; justify-content: center;
-            transition: background 0.2s;
-        }
-        .heading-up-ctrl:hover { background: #f0f0f0; }
-        .heading-up-ctrl svg { width: 20px; height: 20px; }
-        .heading-up-ctrl.active { background: #e3f2fd; }
-        .heading-up-ctrl.active svg { stroke: #1565c0; }
-
-        /* Hide default leaflet-rotate compass control */
-        .leaflet-control-rotate { display: none; }
-
         /* Map tile dark filter */
         .leaflet-tile-pane { transition: filter 0.4s ease; }
         .leaflet-tile-pane.dark-tiles {
@@ -681,11 +666,6 @@
         body.dark-map .offline-map-ctrl { background: rgba(26, 39, 68, 0.95); box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
         body.dark-map .offline-map-ctrl:hover { background: rgba(40, 56, 90, 0.95); }
         body.dark-map .offline-map-ctrl svg { stroke: #90caf9; }
-        body.dark-map .heading-up-ctrl  { background: rgba(26, 39, 68, 0.95); box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
-        body.dark-map .heading-up-ctrl:hover { background: rgba(40, 56, 90, 0.95); }
-        body.dark-map .heading-up-ctrl svg { stroke: #90caf9; }
-        body.dark-map .heading-up-ctrl.active { background: #1a2744; }
-        body.dark-map .heading-up-ctrl.active svg { stroke: #90caf9; }
 
         .dl-area-dialog {
             display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -1559,7 +1539,6 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
     <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
     <script src="capacitor.js"></script>
     <script>
@@ -1677,10 +1656,7 @@
         var map = L.map('map', {
             center: [32.3, 34.55],
             zoom: 9,
-            zoomControl: true,
-            rotate: true,
-            bearing: 0,
-            touchRotate: false
+            zoomControl: true
         });
 
         var cartoLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -4638,40 +4614,6 @@
         });
         map.addControl(new DarkMapControl());
 
-        // ---- Heading Up / North Up Toggle ----
-        var _headingUpMode = localStorage.getItem('headingUp') === '1';
-        var HeadingUpControl = L.Control.extend({
-            options: { position: 'bottomleft' },
-            onAdd: function () {
-                var div = L.DomUtil.create('div', 'leaflet-bar heading-up-ctrl');
-                div.title = _headingUpMode ? 'Switch to North Up' : 'Switch to Heading Up';
-                div.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-                    '<polygon points="12 2 19 21 12 17 5 21"/></svg>';
-                if (_headingUpMode) {
-                    div.classList.add('active');
-                    if (gpsHasHeading) map.setBearing(-gpsHeading);
-                }
-                L.DomEvent.disableClickPropagation(div);
-                div.addEventListener('click', function () {
-                    _headingUpMode = !_headingUpMode;
-                    div.classList.toggle('active', _headingUpMode);
-                    div.title = _headingUpMode ? 'Switch to North Up' : 'Switch to Heading Up';
-                    localStorage.setItem('headingUp', _headingUpMode ? '1' : '0');
-                    if (_headingUpMode) {
-                        if (gpsHasHeading) map.setBearing(-gpsHeading);
-                    } else {
-                        map.setBearing(0);
-                    }
-                    // Refresh GPS icon to update rotation
-                    if (gpsMarker && gpsIsMoving) {
-                        gpsMarker.setIcon(createGpsMovingIcon(gpsHeading));
-                    }
-                });
-                return div;
-            }
-        });
-        map.addControl(new HeadingUpControl());
-
         function estimateTileCount(bounds, zMin, zMax) {
             var total = 0;
             for (var z = zMin; z <= zMax; z++) {
@@ -5166,10 +5108,8 @@
         }
 
         function createGpsMovingIcon(heading) {
-            // In heading-up mode the map is already rotated, so icon points straight up
-            var rotation = _headingUpMode ? 0 : heading;
             var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 40 40" ' +
-                'style="transform:rotate(' + rotation + 'deg)">' +
+                'style="transform:rotate(' + heading + 'deg)">' +
                 '<path d="M20 4 L28 34 L20 28 L12 34 Z" fill="#4285F4" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>' +
                 '<line x1="20" y1="4" x2="20" y2="16" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>' +
                 '</svg>';
@@ -5346,11 +5286,6 @@
             var iconChanged = moving !== gpsIsMoving || (moving && gpsIsMoving);
             gpsIsMoving = moving;
             updateSogCogDisplay();
-
-            // Rotate map in heading-up mode
-            if (_headingUpMode && gpsHasHeading) {
-                map.setBearing(-gpsHeading);
-            }
 
             // Refresh weather at position (throttled by cache TTL)
             maybeRefreshWxHere(lat, lon);
