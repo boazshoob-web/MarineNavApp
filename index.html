@@ -1677,6 +1677,12 @@
             attribution: 'Bathymetry: <a href="https://www.gebco.net">GEBCO</a> | Data: <a href="https://open-meteo.com/">Open-Meteo</a>'
         });
 
+        var openSeaMap = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
+            attribution: 'Nautical: <a href="https://www.openseamap.org">OpenSeaMap</a>',
+            maxZoom: 18,
+            opacity: 1
+        }).addTo(map);
+
         var windLayer = L.layerGroup().addTo(map);
         var waveLayer = L.layerGroup();
         var isobarLayer = L.layerGroup();
@@ -1695,6 +1701,7 @@
             'Sea Depth (EMODnet)': emodnetBathy,
             'Sea Depth (GEBCO)': gebcoBathy
         }, {
+            'Sea Marks': openSeaMap,
             'Wind Arrows': windLayer,
             'Wave Heights': waveLayer,
             'Isobars': isobarLayer,
@@ -4024,6 +4031,10 @@
             return 'https://' + sub + '.basemaps.cartocdn.com/light_all/' + z + '/' + x + '/' + y + '.png';
         }
 
+        function seaMarkTileUrl(z, x, y) {
+            return 'https://tiles.openseamap.org/seamark/' + z + '/' + x + '/' + y + '.png';
+        }
+
         function downloadTilesForRoute(waypoints, onProgress) {
             // Fetching tiles triggers the Service Worker's cache-first strategy,
             // which stores them in the Cache API for offline access.
@@ -4033,7 +4044,14 @@
                 allTiles = allTiles.concat(getTileCoords(bounds, z));
             }
 
-            var total = allTiles.length;
+            // Build URL pairs: base map + sea marks for each tile
+            var allUrls = [];
+            allTiles.forEach(function (t) {
+                allUrls.push(tileUrl(t.z, t.x, t.y));
+                allUrls.push(seaMarkTileUrl(t.z, t.x, t.y));
+            });
+
+            var total = allUrls.length;
             var done = 0;
             var savedBytes = 0;
             var cachedUrls = [];
@@ -4041,9 +4059,8 @@
 
             function processBatch(idx) {
                 if (idx >= total) return Promise.resolve({ bytes: savedBytes, urls: cachedUrls });
-                var batch = allTiles.slice(idx, idx + BATCH);
-                return Promise.all(batch.map(function (t) {
-                    var url = tileUrl(t.z, t.x, t.y);
+                var batch = allUrls.slice(idx, idx + BATCH);
+                return Promise.all(batch.map(function (url) {
                     return fetch(url).then(function (r) {
                         if (!r.ok) return 0;
                         cachedUrls.push(url);
@@ -4634,8 +4651,8 @@
             var zMin = parseInt(document.getElementById('dlZoomMin').value) || 8;
             var zMax = parseInt(document.getElementById('dlZoomMax').value) || 15;
             if (zMin > zMax) { var t = zMin; zMin = zMax; zMax = t; }
-            var count = estimateTileCount(bounds, zMin, zMax);
-            var estMB = (count * 15 / 1024).toFixed(1);  // ~15KB avg per tile
+            var count = estimateTileCount(bounds, zMin, zMax) * 2;  // base map + sea marks
+            var estMB = (count * 10 / 1024).toFixed(1);  // ~10KB avg (sea mark tiles are small)
             document.getElementById('dlTileCount').textContent = count.toLocaleString() + ' tiles';
             document.getElementById('dlTileSize').textContent = '(~' + estMB + ' MB)';
         }
@@ -4682,7 +4699,14 @@
                 allTiles = allTiles.concat(getTileCoords(bounds, z));
             }
 
-            var total = allTiles.length;
+            // Build URL list: base map + sea marks for each tile
+            var allUrls = [];
+            allTiles.forEach(function (t) {
+                allUrls.push(tileUrl(t.z, t.x, t.y));
+                allUrls.push(seaMarkTileUrl(t.z, t.x, t.y));
+            });
+
+            var total = allUrls.length;
             var done = 0;
             var savedBytes = 0;
             var BATCH = 6;
@@ -4693,9 +4717,8 @@
 
             function processBatch(idx) {
                 if (idx >= total) return Promise.resolve();
-                var batch = allTiles.slice(idx, idx + BATCH);
-                return Promise.all(batch.map(function (t) {
-                    var url = tileUrl(t.z, t.x, t.y);
+                var batch = allUrls.slice(idx, idx + BATCH);
+                return Promise.all(batch.map(function (url) {
                     return fetch(url).then(function (r) {
                         if (!r.ok) return;
                         return r.blob().then(function (blob) { savedBytes += blob.size; });
