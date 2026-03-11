@@ -1,6 +1,6 @@
 // Service Worker — Maritime navigation assist App
 // Cache version: bump this to force re-cache after code changes
-var CACHE_VERSION = 'v5';
+var CACHE_VERSION = 'v6';
 var SHELL_CACHE  = 'shell-' + CACHE_VERSION;
 var CDN_CACHE    = 'cdn-' + CACHE_VERSION;
 var TILE_CACHE   = 'tiles-v1';
@@ -22,7 +22,8 @@ var TILE_ORIGINS = [
     'basemaps.cartocdn.com',
     'tiles.emodnet-bathymetry.eu',
     'wms.gebco.net',
-    'tiles.openseamap.org'
+    'tiles.openseamap.org',
+    'depth.openseamap.org'
 ];
 
 // API origins — network-first strategy (will be used in Phase 2)

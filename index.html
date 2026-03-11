@@ -1689,6 +1689,15 @@
         var isobarLabelLayer = L.layerGroup();
         var depthContourLayer = L.layerGroup();
         var depthContourLabelLayer = L.layerGroup();
+        var osmDepthContourLayer = L.tileLayer.wms('https://depth.openseamap.org/geoserver/openseamap/wms', {
+            layers: 'openseamap:contour2,openseamap:contour',
+            version: '1.1.0',
+            format: 'image/png',
+            transparent: true,
+            attribution: 'Depth: <a href="https://www.openseamap.org">OpenSeaMap</a>',
+            maxZoom: 22,
+            opacity: 0.7
+        });
         var aiWaveLayer = L.layerGroup();
         var routeLayer = L.layerGroup();
         var boatLayer = L.layerGroup();
@@ -1708,6 +1717,7 @@
             'Isobar Labels': isobarLabelLayer,
             'Depth Contours': depthContourLayer,
             'Depth Labels': depthContourLabelLayer,
+            'Depth Contours (OSM)': osmDepthContourLayer,
             'AI Wave Estimate': aiWaveLayer,
             'Route': routeLayer,
             'Boat': boatLayer,
@@ -4035,6 +4045,23 @@
             return 'https://tiles.openseamap.org/seamark/' + z + '/' + x + '/' + y + '.png';
         }
 
+        function depthContourWmsUrl(z, x, y) {
+            // Use Leaflet's own getTileUrl to guarantee URL matches cached tiles
+            if (!osmDepthContourLayer._crs) {
+                osmDepthContourLayer._crs = map.options.crs;
+                osmDepthContourLayer._wmsVersion = parseFloat(osmDepthContourLayer.wmsParams.version);
+                var projKey = osmDepthContourLayer._wmsVersion >= 1.3 ? 'crs' : 'srs';
+                osmDepthContourLayer.wmsParams[projKey] = osmDepthContourLayer._crs.code;
+            }
+            var origMap = osmDepthContourLayer._map;
+            osmDepthContourLayer._map = map;
+            var coords = L.point(x, y);
+            coords.z = z;
+            var url = osmDepthContourLayer.getTileUrl(coords);
+            osmDepthContourLayer._map = origMap;
+            return url;
+        }
+
         function downloadTilesForRoute(waypoints, onProgress) {
             // Fetching tiles triggers the Service Worker's cache-first strategy,
             // which stores them in the Cache API for offline access.
@@ -4044,11 +4071,12 @@
                 allTiles = allTiles.concat(getTileCoords(bounds, z));
             }
 
-            // Build URL pairs: base map + sea marks for each tile
+            // Build URL triples: base map + sea marks + depth contours for each tile
             var allUrls = [];
             allTiles.forEach(function (t) {
                 allUrls.push(tileUrl(t.z, t.x, t.y));
                 allUrls.push(seaMarkTileUrl(t.z, t.x, t.y));
+                allUrls.push(depthContourWmsUrl(t.z, t.x, t.y));
             });
 
             var total = allUrls.length;
@@ -4699,11 +4727,12 @@
                 allTiles = allTiles.concat(getTileCoords(bounds, z));
             }
 
-            // Build URL list: base map + sea marks for each tile
+            // Build URL list: base map + sea marks + depth contours for each tile
             var allUrls = [];
             allTiles.forEach(function (t) {
                 allUrls.push(tileUrl(t.z, t.x, t.y));
                 allUrls.push(seaMarkTileUrl(t.z, t.x, t.y));
+                allUrls.push(depthContourWmsUrl(t.z, t.x, t.y));
             });
 
             var total = allUrls.length;
