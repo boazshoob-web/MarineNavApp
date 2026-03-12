@@ -29,7 +29,8 @@ var TILE_ORIGINS = [
 // API origins — network-first strategy (will be used in Phase 2)
 var API_ORIGINS = [
     'api.open-meteo.com',
-    'marine-api.open-meteo.com'
+    'marine-api.open-meteo.com',
+    'marine-nav-app.vercel.app'
 ];
 
 // ---- Install: pre-cache app shell ----

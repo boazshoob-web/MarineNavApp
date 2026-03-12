@@ -757,6 +757,52 @@
         .log-share { background: none; border: none; color: #1976D2; cursor: pointer; font-size: 15px; padding: 0 4px; line-height: 1; }
         .log-share:hover { color: #1565C0; }
 
+        /* Cloud Sync Panel */
+        .sync-panel {
+            position: absolute; top: 80px; right: 10px; z-index: 1000;
+            background: rgba(255, 255, 255, 0.95); border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+            -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+            min-width: 220px; max-width: 280px; overflow: hidden; display: none;
+            transition: max-height 0.3s ease;
+        }
+        .sync-panel.visible { display: block; }
+        .sync-panel-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 14px; cursor: grab; user-select: none;
+            background: rgba(0, 150, 136, 0.1);
+            border-bottom: 1px solid rgba(0, 150, 136, 0.2);
+        }
+        .sync-panel-header:active { cursor: grabbing; }
+        .sync-panel-header:hover { background: rgba(0, 150, 136, 0.18); }
+        .sync-panel-header h3 { font-size: 13px; font-weight: 600; color: #00897b; margin: 0; }
+        .sync-panel-toggle { font-size: 14px; color: #00897b; transition: transform 0.3s; }
+        .sync-panel.collapsed .sync-panel-toggle { transform: rotate(-90deg); }
+        .sync-panel-body { padding: 12px 14px; }
+        .sync-panel.collapsed .sync-panel-body { display: none; }
+        .sync-input {
+            width: 100%; padding: 7px 10px; border: 1px solid #ccc; border-radius: 6px;
+            font-size: 12px; margin-bottom: 6px; box-sizing: border-box;
+        }
+        .sync-input:focus { border-color: #00897b; outline: none; }
+        .sync-btn {
+            width: 100%; padding: 7px 10px; border: none; border-radius: 6px;
+            font-size: 12px; font-weight: 600; cursor: pointer; color: #fff;
+            margin-bottom: 4px; transition: background 0.2s;
+        }
+        .sync-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .sync-btn-primary { background: #00897b; }
+        .sync-btn-primary:hover:not(:disabled) { background: #00796b; }
+        .sync-btn-secondary { background: #78909c; }
+        .sync-btn-secondary:hover:not(:disabled) { background: #607d8b; }
+        .sync-btn-danger { background: #e65100; }
+        .sync-btn-danger:hover:not(:disabled) { background: #bf360c; }
+        .sync-status { font-size: 11px; color: #888; margin-top: 6px; }
+        .sync-status.ok { color: #43a047; }
+        .sync-status.error { color: #e53935; }
+        .sync-status.syncing { color: #1976d2; }
+        .sync-email-display { font-size: 11px; color: #333; margin-bottom: 8px; font-weight: 600; }
+
         /* Log Action Chooser */
         .log-action-overlay {
             display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -1046,6 +1092,11 @@
                 <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="14" y2="11"/>
             </svg>
         </button>
+        <button class="fm-btn" id="fmSync" onclick="togglePanel('syncPanel')" title="Cloud Sync">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#00897b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+            </svg>
+        </button>
     </div>
 
     <!-- Boat heading slider -->
@@ -1266,6 +1317,31 @@
                 <h4>Saved Logs</h4>
                 <div id="savedLogList"></div>
             </div>
+        </div>
+    </div>
+
+    <!-- Cloud Sync Panel -->
+    <div class="sync-panel" id="syncPanel">
+        <div class="sync-panel-header" id="syncPanelHeader">
+            <span class="route-panel-drag-hint">&#9776;</span>
+            <h3 style="flex:1">Cloud Sync</h3>
+            <span class="sync-panel-toggle">&#9660;</span>
+        </div>
+        <div class="sync-panel-body">
+            <!-- Signed-out state -->
+            <div id="syncAuthForm">
+                <input type="email" class="sync-input" id="syncEmail" placeholder="Email" autocomplete="email">
+                <input type="password" class="sync-input" id="syncPass" placeholder="Passphrase" autocomplete="current-password">
+                <button class="sync-btn sync-btn-primary" id="syncLoginBtn" onclick="syncLogin()">Sign In</button>
+                <button class="sync-btn sync-btn-secondary" onclick="syncRegister()">Create Account</button>
+            </div>
+            <!-- Signed-in state -->
+            <div id="syncLoggedIn" style="display:none">
+                <div class="sync-email-display" id="syncEmailDisplay"></div>
+                <button class="sync-btn sync-btn-primary" id="syncNowBtn" onclick="syncCloud()">Sync Now</button>
+                <button class="sync-btn sync-btn-danger" onclick="syncLogout()" style="margin-top:6px">Sign Out</button>
+            </div>
+            <div class="sync-status" id="syncStatus"></div>
         </div>
     </div>
 
@@ -1819,7 +1895,7 @@
         // FLOATING MENU & PANEL TOGGLE
         // ============================================================
 
-        var panelBtnMap = { controlPanel: 'fmWeather', routePanel: 'fmRoute', trackPanel: 'fmTrack', anchorPanel: 'fmAnchor', logPanel: 'fmLog' };
+        var panelBtnMap = { controlPanel: 'fmWeather', routePanel: 'fmRoute', trackPanel: 'fmTrack', anchorPanel: 'fmAnchor', logPanel: 'fmLog', syncPanel: 'fmSync' };
 
         function togglePanel(panelId) {
             var panel = document.getElementById(panelId);
@@ -4268,7 +4344,8 @@
                             hasTiles: true,
                             tileBytes: totalTileBytes,
                             tileUrls: tileUrls,
-                            bounds: getRouteBounds(wpData, OFFLINE_MARGIN_DEG)
+                            bounds: getRouteBounds(wpData, OFFLINE_MARGIN_DEG),
+                            updatedAt: new Date().toISOString()
                         };
 
                         return dbPutStore(STORE_ROUTES, routeId, routeRecord);
@@ -4286,6 +4363,7 @@
                         setTimeout(hideSaveProgress, 3000);
                         btn.disabled = false;
                         refreshOfflineRouteList();
+                        trySyncCloud();
                     })
                     .catch(function (err) {
                         console.error('[Offline] Save failed:', err);
@@ -4335,7 +4413,8 @@
                         hasTiles: false,
                         tileBytes: 0,
                         tileUrls: [],
-                        bounds: getRouteBounds(wpData, OFFLINE_MARGIN_DEG)
+                        bounds: getRouteBounds(wpData, OFFLINE_MARGIN_DEG),
+                        updatedAt: new Date().toISOString()
                     };
 
                     return dbPutStore(STORE_ROUTES, routeId, routeRecord);
@@ -4348,6 +4427,7 @@
                     setTimeout(hideSaveProgress, 2000);
                     btn.disabled = false;
                     refreshOfflineRouteList();
+                    trySyncCloud();
                 })
                 .catch(function (err) {
                     console.error('[SaveRoute] Save failed:', err);
@@ -4460,7 +4540,9 @@
                     loadedRouteId = null;
                     document.getElementById('rSaveOfflineBtn').textContent = 'Save for Offline';
                 }
+                addPendingDelete('routes', routeId);
                 refreshOfflineRouteList();
+                trySyncCloud();
                 var msg = deleteTiles && uniqueUrls.length > 0
                     ? 'Route and ' + uniqueUrls.length + ' cached tiles deleted.'
                     : 'Route deleted (map tiles kept).';
@@ -6638,7 +6720,8 @@
                     destinationLocation: null,
                     arrivalDateTime: null,
                     closed: false,
-                    entries: [entry]
+                    entries: [entry],
+                    updatedAt: now.toISOString()
                 };
 
                 dbPutStore(STORE_LOGS, logId, logRecord).then(function () {
@@ -6647,6 +6730,7 @@
                     updateLogPanelUI();
                     refreshSavedLogList();
                     closeLogEntryForm();
+                    trySyncCloud();
                 });
             } else {
                 // Append to existing log
@@ -6656,10 +6740,12 @@
                 dbGetStore(STORE_LOGS, logId).then(function (log) {
                     if (!log) return;
                     log.entries.push(entry);
+                    log.updatedAt = new Date().toISOString();
                     return dbPutStore(STORE_LOGS, logId, log);
                 }).then(function () {
                     updateLogPanelUI();
                     closeLogEntryForm();
+                    trySyncCloud();
                 });
             }
         }
@@ -6686,12 +6772,14 @@
                 log.closed = true;
                 log.arrivalDateTime = now.toISOString();
                 log.destinationLocation = destPos;
+                log.updatedAt = now.toISOString();
                 return dbPutStore(STORE_LOGS, log.id, log);
             }).then(function () {
                 logbookState.activeLogId = null;
                 try { localStorage.removeItem('logbook_active'); } catch (e) {}
                 updateLogPanelUI();
                 refreshSavedLogList();
+                trySyncCloud();
             });
         }
         window.closeActiveLog = closeActiveLog;
@@ -6942,7 +7030,9 @@
                     try { localStorage.removeItem('logbook_active'); } catch (e) {}
                     updateLogPanelUI();
                 }
+                addPendingDelete('logs', logId);
                 refreshSavedLogList();
+                trySyncCloud();
             });
         }
         window.deleteLog = deleteLog;
@@ -6981,14 +7071,309 @@
         }
 
         // ============================================================
+        // CLOUD SYNC
+        // ============================================================
+
+        var SYNC_API_BASE = (typeof window.Capacitor !== 'undefined')
+            ? 'https://marine-nav-app.vercel.app'
+            : '';
+        var _syncInProgress = false;
+
+        function getSyncJwt() {
+            try { return localStorage.getItem('sync_jwt'); } catch (e) { return null; }
+        }
+        function isLoggedIn() { return !!getSyncJwt(); }
+
+        function setSyncStatus(msg, type) {
+            var el = document.getElementById('syncStatus');
+            if (el) { el.textContent = msg; el.className = 'sync-status' + (type ? ' ' + type : ''); }
+        }
+
+        function addPendingDelete(store, localId) {
+            try {
+                var list = JSON.parse(localStorage.getItem('sync_deleted') || '[]');
+                list.push({ store: store, localId: localId });
+                localStorage.setItem('sync_deleted', JSON.stringify(list));
+            } catch (e) {}
+        }
+
+        function clearPendingDeletes() {
+            try { localStorage.removeItem('sync_deleted'); } catch (e) {}
+        }
+
+        function getPendingDeletes() {
+            try { return JSON.parse(localStorage.getItem('sync_deleted') || '[]'); } catch (e) { return []; }
+        }
+
+        function initSyncUI() {
+            var jwt = getSyncJwt();
+            var authForm = document.getElementById('syncAuthForm');
+            var loggedIn = document.getElementById('syncLoggedIn');
+            if (jwt) {
+                authForm.style.display = 'none';
+                loggedIn.style.display = 'block';
+                var email = '';
+                try { email = localStorage.getItem('sync_user_email') || ''; } catch (e) {}
+                document.getElementById('syncEmailDisplay').textContent = email;
+                var lastSync = '';
+                try { lastSync = localStorage.getItem('sync_last_ts') || ''; } catch (e) {}
+                if (lastSync) {
+                    var d = new Date(lastSync);
+                    setSyncStatus('Last sync: ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString(), '');
+                }
+            } else {
+                authForm.style.display = 'block';
+                loggedIn.style.display = 'none';
+            }
+            // Make panel draggable
+            var syncPanel = document.getElementById('syncPanel');
+            var syncHeader = document.getElementById('syncPanelHeader');
+            makePanelDraggable(syncPanel, syncHeader, function () {
+                syncPanel.classList.toggle('collapsed');
+            });
+        }
+
+        function syncRegister() {
+            var email = document.getElementById('syncEmail').value.trim();
+            var pass = document.getElementById('syncPass').value;
+            if (!email || !pass) { setSyncStatus('Enter email and passphrase', 'error'); return; }
+            if (pass.length < 4) { setSyncStatus('Passphrase must be at least 4 characters', 'error'); return; }
+
+            setSyncStatus('Creating account...', 'syncing');
+            fetch(SYNC_API_BASE + '/api/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email, passphrase: pass })
+            }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+            .then(function (res) {
+                if (!res.ok) { setSyncStatus(res.data.error || 'Registration failed', 'error'); return; }
+                try {
+                    localStorage.setItem('sync_jwt', res.data.jwt);
+                    localStorage.setItem('sync_user_email', res.data.email);
+                } catch (e) {}
+                setSyncStatus('Account created!', 'ok');
+                initSyncUI();
+                trySyncCloud();
+            }).catch(function (err) { setSyncStatus('Network error', 'error'); });
+        }
+        window.syncRegister = syncRegister;
+
+        function syncLogin() {
+            var email = document.getElementById('syncEmail').value.trim();
+            var pass = document.getElementById('syncPass').value;
+            if (!email || !pass) { setSyncStatus('Enter email and passphrase', 'error'); return; }
+
+            setSyncStatus('Signing in...', 'syncing');
+            fetch(SYNC_API_BASE + '/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email, passphrase: pass })
+            }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+            .then(function (res) {
+                if (!res.ok) { setSyncStatus(res.data.error || 'Login failed', 'error'); return; }
+                try {
+                    localStorage.setItem('sync_jwt', res.data.jwt);
+                    localStorage.setItem('sync_user_email', res.data.email);
+                } catch (e) {}
+                setSyncStatus('Signed in!', 'ok');
+                initSyncUI();
+                trySyncCloud();
+            }).catch(function (err) { setSyncStatus('Network error', 'error'); });
+        }
+        window.syncLogin = syncLogin;
+
+        function syncLogout() {
+            try {
+                localStorage.removeItem('sync_jwt');
+                localStorage.removeItem('sync_user_email');
+                localStorage.removeItem('sync_last_ts');
+                localStorage.removeItem('sync_deleted');
+            } catch (e) {}
+            setSyncStatus('Signed out', '');
+            initSyncUI();
+        }
+        window.syncLogout = syncLogout;
+
+        function trySyncCloud() {
+            if (!isLoggedIn()) return;
+            if (!navigator.onLine) return;
+            if (_syncInProgress) return;
+            syncCloud();
+        }
+        window.trySyncCloud = trySyncCloud;
+
+        function syncCloud() {
+            if (_syncInProgress) return;
+            _syncInProgress = true;
+            var jwt = getSyncJwt();
+            if (!jwt) { _syncInProgress = false; return; }
+
+            setSyncStatus('Syncing...', 'syncing');
+            var btn = document.getElementById('syncNowBtn');
+            if (btn) btn.disabled = true;
+
+            var lastSync = null;
+            try { lastSync = localStorage.getItem('sync_last_ts') || null; } catch (e) {}
+
+            var pendingDeletes = getPendingDeletes();
+            var routeDeletes = pendingDeletes.filter(function (d) { return d.store === 'routes'; }).map(function (d) { return d.localId; });
+            var logDeletes = pendingDeletes.filter(function (d) { return d.store === 'logs'; }).map(function (d) { return d.localId; });
+
+            // Gather all local routes and logs
+            Promise.all([
+                dbGetAllKeys(STORE_ROUTES).then(function (keys) {
+                    return Promise.all(keys.map(function (k) { return dbGetStore(STORE_ROUTES, k); }));
+                }),
+                dbGetAllKeys(STORE_LOGS).then(function (keys) {
+                    return Promise.all(keys.map(function (k) { return dbGetStore(STORE_LOGS, k); }));
+                })
+            ]).then(function (results) {
+                var localRoutes = results[0].filter(Boolean);
+                var localLogs = results[1].filter(Boolean);
+
+                // Filter to items changed since last sync (or all if first sync)
+                var routeUpserts = localRoutes.filter(function (r) {
+                    if (!lastSync) return true;
+                    var updAt = r.updatedAt || new Date(r.timestamp).toISOString();
+                    return updAt > lastSync;
+                }).map(function (r) {
+                    return {
+                        localId: r.id,
+                        name: r.name,
+                        timestamp: r.timestamp,
+                        waypoints: r.waypoints,
+                        params: r.params,
+                        depthProfiles: r.depthProfiles || null,
+                        weather: r.weather || null,
+                        bounds: r.bounds || null,
+                        updatedAt: r.updatedAt || new Date(r.timestamp).toISOString()
+                    };
+                });
+
+                var logUpserts = localLogs.filter(function (l) {
+                    if (!lastSync) return true;
+                    var updAt = l.updatedAt || l.departureDateTime || new Date().toISOString();
+                    return updAt > lastSync;
+                }).map(function (l) {
+                    return {
+                        localId: l.id,
+                        captainName: l.captainName,
+                        departureLocation: l.departureLocation,
+                        departureDateTime: l.departureDateTime,
+                        destinationLocation: l.destinationLocation,
+                        arrivalDateTime: l.arrivalDateTime,
+                        closed: l.closed,
+                        entries: l.entries,
+                        updatedAt: l.updatedAt || l.departureDateTime || new Date().toISOString()
+                    };
+                });
+
+                var body = {
+                    lastSync: lastSync,
+                    routes: { upserted: routeUpserts, deleted: routeDeletes },
+                    logs: { upserted: logUpserts, deleted: logDeletes }
+                };
+
+                return fetch(SYNC_API_BASE + '/api/sync', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + jwt
+                    },
+                    body: JSON.stringify(body)
+                });
+            }).then(function (resp) {
+                if (resp.status === 401) {
+                    setSyncStatus('Session expired — please sign in again', 'error');
+                    syncLogout();
+                    throw new Error('auth');
+                }
+                return resp.json();
+            }).then(function (data) {
+                if (data.error) { throw new Error(data.error); }
+
+                // Apply server route upserts
+                var routePromises = (data.routes.upserted || []).map(function (sr) {
+                    return dbGetStore(STORE_ROUTES, sr.localId).then(function (existing) {
+                        var record = {
+                            id: sr.localId,
+                            name: sr.name,
+                            timestamp: sr.timestamp,
+                            waypoints: sr.waypoints,
+                            params: sr.params,
+                            depthProfiles: sr.depthProfiles,
+                            weather: sr.weather,
+                            bounds: sr.bounds,
+                            updatedAt: sr.updatedAt,
+                            // Preserve local-only fields
+                            hasTiles: existing ? existing.hasTiles : false,
+                            tileBytes: existing ? existing.tileBytes : 0,
+                            tileUrls: existing ? (existing.tileUrls || []) : []
+                        };
+                        return dbPutStore(STORE_ROUTES, sr.localId, record);
+                    });
+                });
+
+                // Apply server route deletes
+                var routeDeletePromises = (data.routes.deleted || []).map(function (localId) {
+                    return dbDeleteStore(STORE_ROUTES, localId);
+                });
+
+                // Apply server log upserts
+                var logPromises = (data.logs.upserted || []).map(function (sl) {
+                    var record = {
+                        id: sl.localId,
+                        captainName: sl.captainName,
+                        departureLocation: sl.departureLocation,
+                        departureDateTime: sl.departureDateTime,
+                        destinationLocation: sl.destinationLocation,
+                        arrivalDateTime: sl.arrivalDateTime,
+                        closed: sl.closed,
+                        entries: sl.entries,
+                        updatedAt: sl.updatedAt
+                    };
+                    return dbPutStore(STORE_LOGS, sl.localId, record);
+                });
+
+                // Apply server log deletes
+                var logDeletePromises = (data.logs.deleted || []).map(function (localId) {
+                    return dbDeleteStore(STORE_LOGS, localId);
+                });
+
+                return Promise.all(routePromises.concat(routeDeletePromises, logPromises, logDeletePromises)).then(function () {
+                    return data.serverTime;
+                });
+            }).then(function (serverTime) {
+                try { localStorage.setItem('sync_last_ts', serverTime); } catch (e) {}
+                clearPendingDeletes();
+                var d = new Date(serverTime);
+                setSyncStatus('Synced: ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString(), 'ok');
+                refreshOfflineRouteList();
+                refreshSavedLogList();
+            }).catch(function (err) {
+                if (err.message !== 'auth') {
+                    console.error('[Sync] Error:', err);
+                    setSyncStatus('Sync failed: ' + err.message, 'error');
+                }
+            }).then(function () {
+                _syncInProgress = false;
+                var btn = document.getElementById('syncNowBtn');
+                if (btn) btn.disabled = false;
+            });
+        }
+        window.syncCloud = syncCloud;
+
+        // ============================================================
         // INIT
         // ============================================================
 
         initApiKeyUI();
         initBoat();
         initLogbook();
+        initSyncUI();
         refreshOfflineRouteList();
-        refreshData();          // single pull on load
+        refreshData();
+        trySyncCloud();          // single pull on load
         isPaused = true;         // start paused — no auto-refresh
         document.getElementById('pauseBtn').textContent = 'Resume';
         document.getElementById('pauseBtn').style.background = '#43a047';
