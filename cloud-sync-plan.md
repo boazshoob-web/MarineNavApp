@@ -1,7 +1,7 @@
 # Cloud Sync Implementation Plan
 
 ## Context
-The app is local-only today. The goal is to let users plan routes on desktop and use them on mobile (including offline). We'll add magic-link auth, a Neon Postgres database, and Vercel API routes so routes and logs sync across all devices. No paywall — free membership for sync.
+The app is local-only today. The goal is to let users plan routes on desktop and use them on mobile (including offline). We'll add email+passphrase auth (no email service needed), a Neon Postgres database, and Vercel API routes so routes and logs sync across all devices. No paywall — free membership for sync.
 
 ## What the user needs to prepare before coding
 
@@ -9,11 +9,6 @@ The app is local-only today. The goal is to let users plan routes on desktop and
 1. Create a project (region: `aws-eu-central-1` Frankfurt — closest to Israel)
 2. Run the schema SQL (provided below) in the Neon SQL editor
 3. Copy the `DATABASE_URL` connection string
-
-### Resend (email service for magic links)
-1. Create account at resend.com
-2. Add a custom domain or use `onboarding@resend.dev` for testing (only sends to your own email)
-3. Create an API key → `RESEND_API_KEY`
 
 ### Vercel
 1. Link the GitHub repo
@@ -23,8 +18,6 @@ The app is local-only today. The goal is to let users plan routes on desktop and
 5. Set environment variables:
    - `DATABASE_URL` — Neon connection string
    - `JWT_SECRET` — generate with `openssl rand -hex 32`
-   - `RESEND_API_KEY` — from Resend
-   - `RESEND_FROM_EMAIL` — e.g. `noreply@yourdomain.com`
 
 ---
 
@@ -32,20 +25,11 @@ The app is local-only today. The goal is to let users plan routes on desktop and
 
 ```sql
 CREATE TABLE users (
-    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email      TEXT UNIQUE NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now()
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email         TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,        -- bcrypt hash of passphrase
+    created_at    TIMESTAMPTZ DEFAULT now()
 );
-
-CREATE TABLE magic_links (
-    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email      TEXT NOT NULL,
-    code       TEXT NOT NULL,          -- 6-digit code
-    created_at TIMESTAMPTZ DEFAULT now(),
-    expires_at TIMESTAMPTZ NOT NULL,
-    used       BOOLEAN DEFAULT false
-);
-CREATE INDEX idx_magic_links_email ON magic_links(email);
 
 CREATE TABLE routes (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -84,7 +68,7 @@ CREATE TABLE logs (
 CREATE INDEX idx_logs_user_updated ON logs(user_id, updated_at);
 ```
 
-**Note:** No sessions table needed — using stateless JWTs. Device-specific fields (`hasTiles`, `tileBytes`, `tileUrls`) are NOT stored in the cloud.
+**Note:** No sessions table or magic_links table needed — using stateless JWTs and passphrase auth. Device-specific fields (`hasTiles`, `tileBytes`, `tileUrls`) are NOT stored in the cloud.
 
 ---
 
@@ -92,7 +76,7 @@ CREATE INDEX idx_logs_user_updated ON logs(user_id, updated_at);
 
 ### Phase 1: Vercel deployment + static hosting
 - Add `vercel.json` with CORS headers for API routes (needed by Capacitor/PWA origins)
-- Add `@neondatabase/serverless`, `jose`, `resend` to `package.json`
+- Add `@neondatabase/serverless`, `jose`, `bcryptjs` to `package.json`
 - Deploy, verify `index.html` loads from Vercel
 
 ### Phase 2: API routes
@@ -100,20 +84,27 @@ New files under `api/`:
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/auth/send-code` | POST | Send 6-digit magic code via Resend |
-| `/api/auth/verify` | POST | Verify code, return JWT |
+| `/api/auth/register` | POST | Create account (email + passphrase) |
+| `/api/auth/login` | POST | Sign in (email + passphrase), return JWT |
 | `/api/auth/me` | GET | Return current user info from JWT |
 | `/api/sync` | POST | Bidirectional sync (push + pull) |
 
 **`lib/db.js`** — Neon connection helper
 **`lib/auth.js`** — JWT verification helper (using `jose`)
 
-#### Auth flow (6-digit code — works on web, Android APK, and iOS PWA alike)
-1. User enters email → app calls `POST /api/auth/send-code`
-2. Server upserts user, generates 6-digit code, emails it via Resend (15-min expiry)
-3. User enters code in app → app calls `POST /api/auth/verify {email, code}`
-4. Server validates, returns `{jwt}` (30-day expiry, signed with `JWT_SECRET`)
-5. App stores JWT in `localStorage('sync_jwt')`
+#### Auth flow (email + passphrase — works on web, Android APK, and iOS PWA alike, no email service needed)
+
+**Register:**
+1. User enters email + passphrase in app → app calls `POST /api/auth/register`
+2. Server hashes passphrase with bcrypt, inserts user, returns `{jwt}` (30-day expiry)
+3. App stores JWT in `localStorage('sync_jwt')`
+
+**Login (on same or another device):**
+1. User enters email + passphrase → app calls `POST /api/auth/login`
+2. Server fetches user by email, compares bcrypt hash, returns `{jwt}`
+3. App stores JWT in `localStorage('sync_jwt')`
+
+**No password reset flow needed** — admin can reset directly in Neon if a user forgets. Can add email-based reset later if needed.
 
 #### Sync protocol (`POST /api/sync`)
 Request: `{lastSync, routes: {upserted, deleted}, logs: {upserted, deleted}}`
@@ -128,7 +119,7 @@ Server logic:
 ### Phase 3: Client auth UI (`index.html`)
 - New "Cloud Sync" button in floating menu (cloud icon)
 - New sync panel with two states:
-  - **Signed out:** email input → send code → code input → verify
+  - **Signed out:** email + passphrase inputs, "Sign In" / "Create Account" buttons
   - **Signed in:** shows email, last sync time, "Sync Now" button, "Sign Out"
 - New localStorage keys: `sync_jwt`, `sync_last_ts`, `sync_deleted`, `sync_user_email`
 
@@ -173,8 +164,8 @@ Server logic:
 
 ## New files to create
 - `vercel.json` — config + CORS
-- `api/auth/send-code.js`
-- `api/auth/verify.js`
+- `api/auth/register.js`
+- `api/auth/login.js`
 - `api/auth/me.js`
 - `api/sync.js`
 - `lib/db.js`
@@ -182,7 +173,7 @@ Server logic:
 
 ## Verification
 1. Deploy to Vercel → app loads in browser
-2. Send magic code → receive email → verify → JWT stored
+2. Register with email + passphrase → JWT stored
 3. Create a route on desktop → save → check Neon DB has the row
 4. Open on mobile (or second browser) → sign in → sync → route appears
 5. Edit route on mobile → sync → desktop shows updated version
