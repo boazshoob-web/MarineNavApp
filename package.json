@@ -14,7 +14,10 @@
     "@capacitor-community/background-geolocation": "^1.2.26",
     "@capacitor/android": "^6.2.1",
     "@capacitor/cli": "^6.2.1",
-    "@capacitor/core": "^6.2.1"
+    "@capacitor/core": "^6.2.1",
+    "@neondatabase/serverless": "^0.10.4",
+    "bcryptjs": "^2.4.3",
+    "jose": "^5.9.6"
   },
   "devDependencies": {
     "sharp": "^0.34.5"
