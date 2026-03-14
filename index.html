@@ -4130,11 +4130,14 @@
                 osmDepthContourLayer.wmsParams[projKey] = osmDepthContourLayer._crs.code;
             }
             var origMap = osmDepthContourLayer._map;
+            var origTileZoom = osmDepthContourLayer._tileZoom;
             osmDepthContourLayer._map = map;
+            osmDepthContourLayer._tileZoom = z;
             var coords = L.point(x, y);
             coords.z = z;
             var url = osmDepthContourLayer.getTileUrl(coords);
             osmDepthContourLayer._map = origMap;
+            osmDepthContourLayer._tileZoom = origTileZoom;
             return url;
         }
 
