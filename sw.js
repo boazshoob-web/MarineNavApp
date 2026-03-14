@@ -1,6 +1,6 @@
 // Service Worker — Maritime navigation assist App
 // Cache version: bump this to force re-cache after code changes
-var CACHE_VERSION = 'v6';
+var CACHE_VERSION = 'v7';
 var SHELL_CACHE  = 'shell-' + CACHE_VERSION;
 var CDN_CACHE    = 'cdn-' + CACHE_VERSION;
 var TILE_CACHE   = 'tiles-v1';
@@ -105,7 +105,8 @@ function cacheFirst(request, cacheName) {
         return cache.match(request).then(function (cached) {
             if (cached) return cached;
             return fetch(request).then(function (response) {
-                if (response.ok) {
+                // Cache both normal (ok) and opaque (no-cors) responses
+                if (response.ok || response.type === 'opaque') {
                     cache.put(request, response.clone());
                 }
                 return response;

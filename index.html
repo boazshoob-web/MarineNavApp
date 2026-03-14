@@ -4165,13 +4165,18 @@
                 if (idx >= total) return Promise.resolve({ bytes: savedBytes, urls: cachedUrls });
                 var batch = allUrls.slice(idx, idx + BATCH);
                 return Promise.all(batch.map(function (url) {
-                    return fetch(url).then(function (r) {
-                        if (!r.ok) return 0;
-                        cachedUrls.push(url);
-                        return r.blob().then(function (blob) {
-                            savedBytes += blob.size;
-                            return blob.size;
-                        });
+                    var isWms = url.indexOf('geoserver') !== -1;
+                    var opts = isWms ? { mode: 'no-cors' } : {};
+                    return fetch(url, opts).then(function (r) {
+                        if (r.type === 'opaque' || r.ok) {
+                            cachedUrls.push(url);
+                            if (r.type === 'opaque') return 0; // can't read size of opaque response
+                            return r.blob().then(function (blob) {
+                                savedBytes += blob.size;
+                                return blob.size;
+                            });
+                        }
+                        return 0;
                     }).catch(function () { return 0; });
                 })).then(function () {
                     done += batch.length;
