@@ -4122,23 +4122,20 @@
         }
 
         function depthContourWmsUrl(z, x, y) {
-            // Use Leaflet's own getTileUrl to guarantee URL matches cached tiles
-            if (!osmDepthContourLayer._crs) {
-                osmDepthContourLayer._crs = map.options.crs;
-                osmDepthContourLayer._wmsVersion = parseFloat(osmDepthContourLayer.wmsParams.version);
-                var projKey = osmDepthContourLayer._wmsVersion >= 1.3 ? 'crs' : 'srs';
-                osmDepthContourLayer.wmsParams[projKey] = osmDepthContourLayer._crs.code;
-            }
-            var origMap = osmDepthContourLayer._map;
-            var origTileZoom = osmDepthContourLayer._tileZoom;
-            osmDepthContourLayer._map = map;
-            osmDepthContourLayer._tileZoom = z;
-            var coords = L.point(x, y);
-            coords.z = z;
-            var url = osmDepthContourLayer.getTileUrl(coords);
-            osmDepthContourLayer._map = origMap;
-            osmDepthContourLayer._tileZoom = origTileZoom;
-            return url;
+            // Build WMS URL directly instead of relying on Leaflet internals
+            var tileSize = 256;
+            var nwPoint = L.point(x * tileSize, y * tileSize);
+            var sePoint = nwPoint.add([tileSize, tileSize]);
+            var crs = map.options.crs;
+            var nw = crs.project(map.unproject(nwPoint, z));
+            var se = crs.project(map.unproject(sePoint, z));
+            var bbox = [nw.x, se.y, se.x, nw.y].join(',');
+            return 'https://depth.openseamap.org/geoserver/openseamap/wms' +
+                '?service=WMS&request=GetMap&version=1.1.0' +
+                '&layers=openseamap%3Acontour2%2Copenseamap%3Acontour' +
+                '&styles=&format=image%2Fpng&transparent=true' +
+                '&srs=EPSG%3A3857&width=256&height=256' +
+                '&bbox=' + bbox;
         }
 
         function downloadTilesForRoute(waypoints, onProgress) {
