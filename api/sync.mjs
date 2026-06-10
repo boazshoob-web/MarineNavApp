@@ -17,10 +17,12 @@ export default async function handler(req, res) {
     const { lastSync, routes, logs } = req.body || {};
     const userId = user.userId;
 
-    // The Garmin watch app sends ?client=watch. Connect IQ has a strict
-    // web-response size limit, so for the watch we return slim routes
+    // The Garmin watch app marks itself with client=watch (in the body;
+    // query params break Connect IQ's makeWebRequest). Connect IQ has a
+    // strict web-response size limit, so for the watch we return slim routes
     // (no depthProfiles/weather/etc.) and omit logs entirely.
-    const isWatch = req.query?.client === 'watch';
+    const isWatch = req.query?.client === 'watch' ||
+        (req.body && req.body.client === 'watch');
 
     try {
         // --- Process client route pushes ---
