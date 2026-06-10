@@ -17,6 +17,11 @@ export default async function handler(req, res) {
     const { lastSync, routes, logs } = req.body || {};
     const userId = user.userId;
 
+    // The Garmin watch app sends ?client=watch. Connect IQ has a strict
+    // web-response size limit, so for the watch we return slim routes
+    // (no depthProfiles/weather/etc.) and omit logs entirely.
+    const isWatch = req.query?.client === 'watch';
+
     try {
         // --- Process client route pushes ---
         if (routes?.upserted?.length) {
@@ -108,17 +113,25 @@ export default async function handler(req, res) {
         // Split into upserted/deleted
         const routeUpserted = serverRoutes
             .filter(r => !r.deleted)
-            .map(r => ({
-                localId: r.local_id,
-                name: r.name,
-                timestamp: Number(r.route_timestamp),
-                waypoints: r.waypoints,
-                params: r.params,
-                depthProfiles: r.depth_profiles,
-                weather: r.weather,
-                bounds: r.bounds,
-                updatedAt: r.updated_at
-            }));
+            .map(r => isWatch
+                ? {
+                    // Slim payload for the watch — only what it navigates with.
+                    localId: r.local_id,
+                    name: r.name,
+                    timestamp: Number(r.route_timestamp),
+                    waypoints: r.waypoints
+                }
+                : {
+                    localId: r.local_id,
+                    name: r.name,
+                    timestamp: Number(r.route_timestamp),
+                    waypoints: r.waypoints,
+                    params: r.params,
+                    depthProfiles: r.depth_profiles,
+                    weather: r.weather,
+                    bounds: r.bounds,
+                    updatedAt: r.updated_at
+                });
         const routeDeleted = serverRoutes.filter(r => r.deleted).map(r => r.local_id);
 
         const logUpserted = serverLogs
@@ -143,7 +156,9 @@ export default async function handler(req, res) {
         return res.status(200).json({
             serverTime,
             routes: { upserted: routeUpserted, deleted: routeDeleted },
-            logs: { upserted: logUpserted, deleted: logDeleted }
+            logs: isWatch
+                ? { upserted: [], deleted: [] }
+                : { upserted: logUpserted, deleted: logDeleted }
         });
     } catch (err) {
         console.error('Sync error:', err);
