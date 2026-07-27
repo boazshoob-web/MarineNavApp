@@ -363,6 +363,19 @@
         }
         .route-field span { font-size: 10px; color: #888; }
         .route-field-full { grid-column: 1 / -1; }
+        .route-datetime {
+            flex: 1; min-width: 0; padding: 3px 4px; border: 1px solid #ccc;
+            border-radius: 4px; font-size: 11px;
+        }
+        .route-datetime:focus {
+            outline: none; border-color: #0066ff;
+            box-shadow: 0 0 0 2px rgba(0,102,255,0.15);
+        }
+        .route-now-btn {
+            flex: 0 0 auto; padding: 3px 9px; border: none; border-radius: 4px;
+            background: #0066ff; color: #fff; font-size: 10px; font-weight: 600; cursor: pointer;
+        }
+        .route-now-btn:hover { background: #0052cc; }
         .route-buttons { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; }
         .route-btn {
             flex: 1; min-width: 0; padding: 5px 4px;
@@ -375,6 +388,10 @@
         .route-btn-draw:hover:not(:disabled) { background: #0052cc; }
         .route-btn-draw.drawing { background: #ff6600; }
         .route-btn-draw.drawing:hover { background: #e55c00; }
+        .route-btn-forecast { background: #00838f; color: #fff; }
+        .route-btn-forecast:hover:not(:disabled) { background: #006974; }
+        .route-btn-forecast.active { background: #ff6600; }
+        .route-btn-forecast.active:hover { background: #e55c00; }
         .route-btn-clear { background: #e0e0e0; color: #555; }
         .route-btn-clear:hover:not(:disabled) { background: #ccc; }
         .route-btn-auto { background: #00897b; color: #fff; min-width: 100%; }
@@ -623,6 +640,10 @@
         body.dark-map .route-btn-clear:hover:not(:disabled) { background: #243560; }
         body.dark-map .route-btn-auto   { background: #00695c; }
         body.dark-map .route-btn-auto:hover:not(:disabled) { background: #00796b; }
+        body.dark-map .route-btn-forecast { background: #006064; }
+        body.dark-map .route-btn-forecast:hover:not(:disabled) { background: #00838f; }
+        body.dark-map .route-btn-forecast.active { background: #bf360c; }
+        body.dark-map .route-btn-forecast.active:hover { background: #d84315; }
         body.dark-map .route-btn-export { background: #283593; }
         body.dark-map .route-btn-export:hover:not(:disabled) { background: #303f9f; }
         body.dark-map .route-btn-save   { background: #bf360c; }
@@ -1074,7 +1095,10 @@
         </button>
         <button class="fm-btn" id="fmRoute" onclick="togglePanel('routePanel')" title="Route Planning">
             <svg viewBox="0 0 24 24" fill="none" stroke="#0050cc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+                <circle cx="12" cy="4" r="1.6"/>
+                <line x1="11.3" y1="5.4" x2="6" y2="21"/>
+                <line x1="12.7" y1="5.4" x2="18" y2="21"/>
+                <line x1="9.4" y1="10.2" x2="14.6" y2="10.2"/>
             </svg>
         </button>
         <button class="fm-btn" id="fmTrack" onclick="togglePanel('trackPanel')" title="Tracking">
@@ -1205,11 +1229,17 @@
                         <input type="checkbox" id="rDepthCheck" checked style="margin:0;cursor:pointer"> Check depth clearance
                     </label>
                 </div>
+                <div class="route-field route-field-full" style="margin-top:2px">
+                    <label>Depart</label>
+                    <input type="datetime-local" id="rStartTime" class="route-datetime">
+                    <button type="button" id="rStartNow" class="route-now-btn" onclick="setRouteStartTimeNow()">Now</button>
+                </div>
             </div>
             <div class="route-buttons">
                 <button class="route-btn route-btn-draw" id="rDrawBtn" onclick="toggleRouteDraw()">Draw Route</button>
                 <button class="route-btn route-btn-clear" id="rClearBtn" onclick="clearRoute()" disabled>Clear</button>
                 <button class="route-btn route-btn-auto" id="rAutoBtn" onclick="autoCorrectRoute()" disabled>Auto-Correct Route</button>
+                <button class="route-btn route-btn-forecast" id="rForecastBtn" onclick="toggleForecastMode()" disabled>Forecast Mode</button>
                 <button class="route-btn route-btn-hazards" id="rHazardsBtn" onclick="showRouteHazards()" disabled style="display:none">Show Hazards</button>
                 <button class="route-btn route-btn-export" id="rExportBtn" onclick="exportRouteGPX()" disabled>Export GPX</button>
                 <button class="route-btn" onclick="importRouteGPX()" style="background:#5c6bc0;color:#fff">Import GPX</button>
@@ -3309,6 +3339,13 @@
 
         var loadedRouteId = null;  // ID of currently loaded saved route (for upgrade flow)
 
+        // ---- Route forecast (weather along route at ETA) ----
+        var routeForecastMode = false;  // when true, tapping the route shows an ETA weather popup
+        var routeForecast = null;       // { sig, departureEpoch, samples, times, wind, marine, horizonDays }
+        var _rfPrefetchTimer = null;    // debounce handle
+        var RF_SAMPLE_NM = 2;           // target spacing between forecast sample points (nm)
+        var RF_MAX_SAMPLES = 80;        // cap on locations per batched request
+
         function toggleRoutePanel() {
             document.getElementById('routePanel').classList.toggle('collapsed');
         }
@@ -3393,7 +3430,16 @@
                     var hours = totalNM / speed;
                     var h = Math.floor(hours);
                     var m = Math.round((hours - h) * 60);
-                    document.getElementById('rETA').textContent = h + 'h ' + (m < 10 ? '0' : '') + m + 'm';
+                    var etaText = h + 'h ' + (m < 10 ? '0' : '') + m + 'm';
+                    var startVal = document.getElementById('rStartTime').value;
+                    if (startVal) {
+                        var dep = new Date(startVal).getTime();
+                        if (!isNaN(dep)) {
+                            var arr = new Date(dep + hours * 3600000);
+                            etaText += ' → ' + arr.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                        }
+                    }
+                    document.getElementById('rETA').textContent = etaText;
                 } else {
                     document.getElementById('rETA').textContent = '--';
                 }
@@ -3428,6 +3474,9 @@
                     routeState.waypoints[idx] = marker.getLatLng();
                     syncPolyline();
                 }
+            });
+            marker.on('dragend', function () {
+                if (routeState.waypoints.length >= 2) onRouteGeometryChanged();
             });
 
             routeLayer.addLayer(marker);
@@ -3486,13 +3535,14 @@
                 document.getElementById('rExportBtn').disabled = false;
                 document.getElementById('rSaveRouteBtn').disabled = false;
                 document.getElementById('rSaveOfflineBtn').disabled = false;
+                onRouteGeometryChanged();
             }
         }
 
         function attachPolylineHandlers(polyline) {
             polyline.on('mouseover', function () {
                 if (!routeState.isDrawing) {
-                    map.getContainer().style.cursor = 'copy';
+                    map.getContainer().style.cursor = routeForecastMode ? 'help' : 'copy';
                 }
                 polyline.setStyle({ weight: 6 });
             });
@@ -3504,6 +3554,10 @@
             });
             polyline.on('click', function (e) {
                 L.DomEvent.stopPropagation(e);  // prevent map click from adding endpoint
+                if (routeForecastMode) {
+                    showForecastPopup(e.latlng);
+                    return;
+                }
                 var hit = findNearestSegment(e.latlng);
                 if (hit) {
                     insertWaypoint(hit.point, hit.segIndex);
@@ -3517,6 +3571,302 @@
             });
             attachPolylineHandlers(polyline);
             return polyline;
+        }
+
+        // ============================================================
+        // ROUTE FORECAST — weather along the route at estimated arrival
+        // ============================================================
+
+        // Signature of current waypoints — used to detect stale forecast data
+        function routeWaypointSig() {
+            return routeState.waypoints.map(function (ll) {
+                return ll.lat.toFixed(4) + ',' + ll.lng.toFixed(4);
+            }).join('|');
+        }
+
+        // Sample points along the route (all waypoints + interior points ~RF_SAMPLE_NM apart)
+        function buildRouteSamples() {
+            var pts = routeState.waypoints;
+            var result = { samples: [], totalNM: 0, spacing: RF_SAMPLE_NM, capped: false };
+            if (pts.length < 2) return result;
+
+            var i, total = 0;
+            for (i = 0; i < pts.length - 1; i++) total += distanceNM(pts[i], pts[i + 1]);
+            result.totalNM = total;
+
+            var spacing = RF_SAMPLE_NM;
+            var interiorBudget = RF_MAX_SAMPLES - pts.length;
+            if (interiorBudget < 0) interiorBudget = 0;
+            if (total / spacing > interiorBudget) {
+                spacing = interiorBudget > 0 ? total / interiorBudget : Infinity;
+                result.capped = true;
+            }
+            result.spacing = spacing;
+
+            var samples = [];
+            var cum = 0;
+            for (i = 0; i < pts.length - 1; i++) {
+                var a = pts[i], b = pts[i + 1];
+                var segNM = distanceNM(a, b);
+                samples.push({ lat: a.lat, lng: a.lng, cumNM: cum });
+                if (isFinite(spacing) && segNM > spacing) {
+                    var d = spacing;
+                    while (d < segNM - 1e-6) {
+                        var t = d / segNM;
+                        samples.push({
+                            lat: a.lat + (b.lat - a.lat) * t,
+                            lng: a.lng + (b.lng - a.lng) * t,
+                            cumNM: cum + d
+                        });
+                        d += spacing;
+                    }
+                }
+                cum += segNM;
+            }
+            var last = pts[pts.length - 1];
+            samples.push({ lat: last.lat, lng: last.lng, cumNM: cum });
+            result.samples = samples;
+            return result;
+        }
+
+        // Prefetch hourly forecast for the whole route (debounced)
+        function prefetchRouteForecast() {
+            if (routeState.waypoints.length < 2) return;
+            if (!document.getElementById('rStartTime').value) return;  // no departure time yet
+            if (_rfPrefetchTimer) clearTimeout(_rfPrefetchTimer);
+            _rfPrefetchTimer = setTimeout(doPrefetchRouteForecast, 800);
+        }
+
+        function doPrefetchRouteForecast() {
+            _rfPrefetchTimer = null;
+            if (routeState.waypoints.length < 2) return;
+            var startVal = document.getElementById('rStartTime').value;
+            if (!startVal) return;
+            var departureEpoch = new Date(startVal).getTime();
+            if (isNaN(departureEpoch)) return;
+
+            var built = buildRouteSamples();
+            var samples = built.samples;
+            if (!samples.length) return;
+
+            // Horizon: cover from now through departure + trip duration
+            var speed = getRouteParams().speed || 6;
+            var durationHours = built.totalNM / speed;
+            var msSpan = (departureEpoch - Date.now()) + durationHours * 3600000;
+            var horizonDays = Math.min(16, Math.max(1, Math.ceil(msSpan / 86400000) + 1));
+
+            var lats = samples.map(function (s) { return s.lat.toFixed(4); }).join(',');
+            var windLons = samples.map(function (s) { return s.lng.toFixed(4); }).join(',');
+            var marineLons = samples.map(function (s) { return (s.lng + MARINE_LON_OFFSET).toFixed(4); }).join(',');
+
+            var windUrl = 'https://api.open-meteo.com/v1/forecast' +
+                '?latitude=' + lats + '&longitude=' + windLons +
+                '&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m' +
+                '&wind_speed_unit=kn&timezone=GMT&forecast_days=' + horizonDays;
+            var marineUrl = 'https://marine-api.open-meteo.com/v1/marine' +
+                '?latitude=' + lats + '&longitude=' + marineLons +
+                '&hourly=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_period' +
+                '&timezone=GMT&forecast_days=' + horizonDays;
+
+            var sig = routeWaypointSig();
+            var fbtn = document.getElementById('rForecastBtn');
+            fbtn.disabled = true;
+            if (built.capped) {
+                setRouteStatus('Long route — forecast sampled every ' + built.spacing.toFixed(1) +
+                    ' nm (' + samples.length + ' points). Loading…', 'info');
+            } else {
+                setRouteStatus('Loading route forecast…', 'info');
+            }
+
+            Promise.all([
+                fetchWithRetry(windUrl, 'Route Wind Forecast'),
+                fetchWithRetry(marineUrl, 'Route Wave Forecast')
+            ]).then(function (res) {
+                var windArr = Array.isArray(res[0]) ? res[0] : [res[0]];
+                var marineArr = Array.isArray(res[1]) ? res[1] : [res[1]];
+
+                // Shared UTC time axis (timezone=GMT → append 'Z' for unambiguous parsing)
+                var t0 = (windArr[0] && windArr[0].hourly && windArr[0].hourly.time) || [];
+                var times = t0.map(function (t) { return Date.parse(t + 'Z'); });
+
+                var wind = samples.map(function (s, i) {
+                    var h = (windArr[i] && windArr[i].hourly) || {};
+                    return { speed: h.wind_speed_10m || [], dir: h.wind_direction_10m || [], gust: h.wind_gusts_10m || [] };
+                });
+                var marine = samples.map(function (s, i) {
+                    var h = (marineArr[i] && marineArr[i].hourly) || {};
+                    return {
+                        waveH: h.wave_height || [], waveD: h.wave_direction || [], waveP: h.wave_period || [],
+                        swellH: h.swell_wave_height || [], swellP: h.swell_wave_period || []
+                    };
+                });
+
+                routeForecast = {
+                    sig: sig, departureEpoch: departureEpoch, samples: samples,
+                    times: times, wind: wind, marine: marine, horizonDays: horizonDays
+                };
+                fbtn.disabled = false;
+                setRouteStatus('Route forecast ready — enable Forecast Mode and tap the route.', 'ok');
+                updateRouteLabels();
+            }).catch(function (err) {
+                routeForecast = null;
+                fbtn.disabled = true;
+                routeForecastMode = false;
+                fbtn.classList.remove('active');
+                setRouteStatus('Forecast unavailable: ' + (err && err.message ? err.message : 'network error'), 'error');
+            });
+        }
+
+        // Cumulative along-route distance (nm) to a projected point on a given segment
+        function cumNMToPoint(segIndex, point) {
+            var pts = routeState.waypoints;
+            var cum = 0;
+            for (var i = 0; i < segIndex; i++) cum += distanceNM(pts[i], pts[i + 1]);
+            cum += distanceNM(pts[segIndex], { lat: point.lat, lng: point.lng });
+            return cum;
+        }
+
+        // Forecast at a given along-route distance, using vessel speed to derive ETA
+        function getForecastAt(cumNM) {
+            if (!routeForecast) return null;
+            var speed = getRouteParams().speed || 6;
+            var arrivalEpoch = routeForecast.departureEpoch + (cumNM / speed) * 3600000;
+            var times = routeForecast.times;
+            if (!times.length) return null;
+            if (arrivalEpoch < times[0] || arrivalEpoch > times[times.length - 1]) {
+                return { arrivalEpoch: arrivalEpoch, beyond: true };
+            }
+
+            // Nearest sample point (spatially) by along-route distance
+            var samples = routeForecast.samples;
+            var si = 0, best = Infinity;
+            for (var k = 0; k < samples.length; k++) {
+                var dd = Math.abs(samples[k].cumNM - cumNM);
+                if (dd < best) { best = dd; si = k; }
+            }
+
+            // Bracketing hours around the ETA
+            var hi = 1;
+            while (hi < times.length && times[hi] < arrivalEpoch) hi++;
+            if (hi >= times.length) hi = times.length - 1;
+            var lo = hi - 1;
+            if (lo < 0) lo = 0;
+            var span = times[hi] - times[lo];
+            var frac = span > 0 ? (arrivalEpoch - times[lo]) / span : 0;
+
+            var w = routeForecast.wind[si], m = routeForecast.marine[si];
+            function lerp(arr) {
+                var a = arr[lo], b = arr[hi];
+                if (a == null && b == null) return null;
+                if (a == null) return b;
+                if (b == null) return a;
+                return a + (b - a) * frac;
+            }
+            function nearest(arr) {  // for circular fields (directions)
+                var idx = frac < 0.5 ? lo : hi;
+                if (arr[idx] != null) return arr[idx];
+                return arr[lo] != null ? arr[lo] : arr[hi];
+            }
+            return {
+                arrivalEpoch: arrivalEpoch, beyond: false, sample: samples[si],
+                windSpeed: lerp(w.speed), windDir: nearest(w.dir), gust: lerp(w.gust),
+                waveHeight: lerp(m.waveH), waveDir: nearest(m.waveD), wavePeriod: lerp(m.waveP),
+                swellHeight: lerp(m.swellH), swellPeriod: lerp(m.swellP)
+            };
+        }
+
+        // Build + show the ETA weather popup at a tapped point on the route
+        function showForecastPopup(latlng) {
+            if (!routeForecast) {
+                setRouteStatus(_rfPrefetchTimer ? 'Loading route forecast…' :
+                    'Set a departure time to load the forecast first.', 'info');
+                return;
+            }
+            var hit = findNearestSegment(latlng);
+            if (!hit) return;
+            var cumNM = cumNMToPoint(hit.segIndex, hit.point);
+            var fc = getForecastAt(cumNM);
+
+            var speed = getRouteParams().speed || 6;
+            var hrs = cumNM / speed;
+            var hh = Math.floor(hrs), mm = Math.round((hrs - hh) * 60);
+            if (mm === 60) { hh++; mm = 0; }
+            var elapsed = '+' + hh + 'h ' + (mm < 10 ? '0' : '') + mm + 'm';
+            var arriveStr = fc ? new Date(fc.arrivalEpoch).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '--';
+            var arriveDay = fc ? new Date(fc.arrivalEpoch).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' }) : '';
+
+            function fmt(v, d) { return v == null ? '—' : v.toFixed(d == null ? 0 : d); }
+            var html;
+            if (!fc || fc.beyond) {
+                html = '<div class="wind-popup">' +
+                    '<div class="popup-name">Arrival ~' + arriveStr + '</div>' +
+                    '<div class="popup-detail">' + arriveDay + ' · ' + cumNM.toFixed(1) + ' nm · ' + elapsed + '</div>' +
+                    '<div class="popup-detail" style="color:#b00000">Beyond forecast range (max ~' +
+                    routeForecast.horizonDays + ' days).</div></div>';
+            } else {
+                html = '<div class="wind-popup">' +
+                    '<div class="popup-name">Arrival ~' + arriveStr + '</div>' +
+                    '<div class="popup-detail" style="margin-bottom:6px">' + arriveDay + ' · ' +
+                        cumNM.toFixed(1) + ' nm · ' + elapsed + ' @ ' + speed + ' kt</div>' +
+                    '<div class="popup-section">' +
+                        '<div class="popup-detail"><strong>Wind:</strong> ' + fmt(fc.windSpeed) + ' kt ' +
+                            (fc.windDir != null ? dirToCompass(fc.windDir) + ' (' + Math.round(fc.windDir) + '°)' : '') + '</div>' +
+                        '<div class="popup-detail"><strong>Gusts:</strong> ' + fmt(fc.gust) + ' kt</div>' +
+                    '</div>' +
+                    '<div class="popup-section">' +
+                        '<div class="popup-detail"><strong>Wave:</strong> ' + fmt(fc.waveHeight, 1) + ' m ' +
+                            (fc.waveDir != null ? dirToCompass(fc.waveDir) + ' (' + Math.round(fc.waveDir) + '°)' : '') + '</div>' +
+                        '<div class="popup-detail"><strong>Period:</strong> ' + fmt(fc.wavePeriod, 1) + ' s</div>' +
+                        (fc.swellHeight != null ? '<div class="popup-detail"><strong>Swell:</strong> ' +
+                            fmt(fc.swellHeight, 1) + ' m @ ' + fmt(fc.swellPeriod, 1) + ' s</div>' : '') +
+                    '</div></div>';
+            }
+            L.popup({ maxWidth: 260, className: 'route-forecast-popup' })
+                .setLatLng(hit.point).setContent(html).openOn(map);
+        }
+
+        // Toggle forecast-tap mode
+        function toggleForecastMode() {
+            if (!routeForecast) {
+                setRouteStatus('Set a departure time to load the forecast first.', 'error');
+                return;
+            }
+            routeForecastMode = !routeForecastMode;
+            document.getElementById('rForecastBtn').classList.toggle('active', routeForecastMode);
+            if (routeForecastMode) {
+                setRouteStatus('Forecast Mode on — tap the route line for conditions at ETA.', 'info');
+            } else {
+                map.getContainer().style.cursor = '';
+                map.closePopup();
+                setRouteStatus('Forecast Mode off. Tap the route to insert waypoints.', '');
+            }
+        }
+        window.toggleForecastMode = toggleForecastMode;
+
+        // Set departure time to now and prefetch
+        function setRouteStartTimeNow() {
+            var now = new Date();
+            var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+            document.getElementById('rStartTime').value =
+                now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) +
+                'T' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+            prefetchRouteForecast();
+        }
+        window.setRouteStartTimeNow = setRouteStartTimeNow;
+
+        // Called when the route shape changes — invalidate stale forecast, refetch if possible
+        function onRouteGeometryChanged() {
+            routeForecast = null;
+            map.closePopup();
+            var fbtn = document.getElementById('rForecastBtn');
+            var hasTime = !!document.getElementById('rStartTime').value;
+            if (routeState.waypoints.length >= 2 && hasTime) {
+                if (fbtn) fbtn.disabled = true;   // re-enabled once refetch completes
+                prefetchRouteForecast();
+            } else {
+                if (fbtn) { fbtn.disabled = true; fbtn.classList.remove('active'); }
+                routeForecastMode = false;
+            }
         }
 
         // ---- Drawing mode ----
@@ -3548,6 +3898,7 @@
                 document.getElementById('rSaveRouteBtn').disabled = false;
                 document.getElementById('rSaveOfflineBtn').disabled = false;
                 setRouteStatus('Route drawn: ' + routeState.waypoints.length + ' waypoints.', 'ok');
+                onRouteGeometryChanged();
             } else {
                 setRouteStatus('Need at least 2 waypoints.', 'error');
             }
@@ -3590,6 +3941,15 @@
             hazBtn.classList.remove('active');
             document.getElementById('routeSummary').style.display = 'none';
             setRouteStatus('', '');
+
+            // Reset route-forecast state
+            if (_rfPrefetchTimer) { clearTimeout(_rfPrefetchTimer); _rfPrefetchTimer = null; }
+            routeForecast = null;
+            routeForecastMode = false;
+            var fbtn = document.getElementById('rForecastBtn');
+            fbtn.disabled = true;
+            fbtn.classList.remove('active');
+            map.closePopup();
         }
         window.clearRoute = clearRoute;
 
@@ -3747,9 +4107,15 @@
             finishRouteDraw();
         });
 
-        // Recalculate ETA when speed changes
+        // Recalculate ETA when speed changes (no forecast refetch — getForecastAt reads live speed)
         document.getElementById('rSpeed').addEventListener('change', function () {
             if (routeState.waypoints.length >= 2) updateRouteLabels();
+        });
+
+        // Departure time set/changed → (re)prefetch the route forecast
+        document.getElementById('rStartTime').addEventListener('change', function () {
+            updateRouteLabels();
+            if (routeState.waypoints.length >= 2) prefetchRouteForecast();
         });
 
         // ============================================================
