@@ -1224,9 +1224,22 @@
                     <label>Safety</label>
                     <input type="number" id="rSafety" value="2" min="0" max="20" step="0.5"><span>m</span>
                 </div>
+                <div class="route-field">
+                    <label title="How close to the wind the boat can sail (close-hauled angle)">Point</label>
+                    <input type="number" id="rTackAngle" value="45" min="30" max="60" step="1"><span>&deg;</span>
+                </div>
+                <div class="route-field">
+                    <label title="Number of tack points per upwind leg">Tacks</label>
+                    <input type="number" id="rTackCount" value="4" min="1" max="10" step="1"><span>/leg</span>
+                </div>
                 <div class="route-field route-field-full" style="margin-top:2px">
                     <label for="rDepthCheck" style="min-width:0;flex:1;display:flex;align-items:center;gap:6px;cursor:pointer">
                         <input type="checkbox" id="rDepthCheck" checked style="margin:0;cursor:pointer"> Check depth clearance
+                    </label>
+                </div>
+                <div class="route-field route-field-full" style="margin-top:2px">
+                    <label for="rShowTacks" style="min-width:0;flex:1;display:flex;align-items:center;gap:6px;cursor:pointer">
+                        <input type="checkbox" id="rShowTacks" style="margin:0;cursor:pointer"> Show recommended tacks (upwind)
                     </label>
                 </div>
                 <div class="route-field route-field-full" style="margin-top:2px">
@@ -1255,6 +1268,7 @@
                 <div><strong>Distance:</strong> <span id="rTotalDist">0.0</span> nm</div>
                 <div><strong>ETA:</strong> <span id="rETA">--</span></div>
                 <div><strong>Waypoints:</strong> <span id="rWpCount">0</span></div>
+                <div id="rTackSummary" style="display:none;margin-top:2px;padding-top:2px;border-top:1px dashed #cfd8dc"><strong style="color:#00695c">Tacking:</strong> <span id="rTackDist">–</span> nm · <span id="rTackETA">–</span></div>
             </div>
             <div class="route-status" id="routeStatus"></div>
             <div class="offline-routes" id="offlineRoutes" style="display:none">
@@ -3334,7 +3348,9 @@
             labels: [],        // Array of L.Marker (distance label divIcons)
             polyline: null,    // L.Polyline
             isAutoCorrecting: false,
-            hazardMarkers: []  // Array of L.CircleMarker (hazard indicators)
+            hazardMarkers: [], // Array of L.CircleMarker (hazard indicators)
+            tackLines: [],     // Array of L.Polyline (recommended tack segments)
+            tackMarkers: []    // Array of L.Marker/L.CircleMarker (tack points + wind arrows)
         };
 
         var loadedRouteId = null;  // ID of currently loaded saved route (for upgrade flow)
@@ -3708,6 +3724,7 @@
                 fbtn.disabled = false;
                 setRouteStatus('Route forecast ready — enable Forecast Mode and tap the route.', 'ok');
                 updateRouteLabels();
+                renderTacks();
             }).catch(function (err) {
                 routeForecast = null;
                 fbtn.disabled = true;
@@ -3835,9 +3852,11 @@
             document.getElementById('rForecastBtn').classList.toggle('active', routeForecastMode);
             if (routeForecastMode) {
                 setRouteStatus('Forecast Mode on — tap the route line for conditions at ETA.', 'info');
+                renderTacks();
             } else {
                 map.getContainer().style.cursor = '';
                 map.closePopup();
+                clearTacks();
                 setRouteStatus('Forecast Mode off. Tap the route to insert waypoints.', '');
             }
         }
@@ -3857,6 +3876,7 @@
         // Called when the route shape changes — invalidate stale forecast, refetch if possible
         function onRouteGeometryChanged() {
             routeForecast = null;
+            clearTacks();
             map.closePopup();
             var fbtn = document.getElementById('rForecastBtn');
             var hasTime = !!document.getElementById('rStartTime').value;
@@ -3866,6 +3886,174 @@
             } else {
                 if (fbtn) { fbtn.disabled = true; fbtn.classList.remove('active'); }
                 routeForecastMode = false;
+            }
+        }
+
+        // ============================================================
+        // RECOMMENDED TACKS — upwind sailing overlay (needs routeForecast)
+        // ============================================================
+
+        // Smallest 0–180° difference between two bearings
+        function angularDiff(a, b) {
+            var d = Math.abs(((a - b) % 360 + 360) % 360);
+            return d > 180 ? 360 - d : d;
+        }
+
+        // Compute the even-tack zig-zag for an upwind leg A→B given the wind (FROM windDir)
+        // and pointing angle theta. Returns { upwind, segs, verts, P, Q, sailedNM, ... }.
+        function solveTacks(A, B, windDir, theta, count) {
+            var rad = Math.PI / 180;
+            var courseAB = bearingDeg(A.lat, A.lng, B.lat, B.lng);
+            // Not a beat if the mark lies outside the no-go zone (sailable directly)
+            if (angularDiff(courseAB, windDir) >= theta) return { upwind: false };
+
+            var stbdHeading = ((windDir - theta) % 360 + 360) % 360;  // wind over starboard side
+            var portHeading = ((windDir + theta) % 360 + 360) % 360;  // wind over port side
+
+            // Local planar frame (east, north metres) anchored at A
+            var mLat = 110540, mLon = 111320 * Math.cos(A.lat * rad);
+            function toLL(x, y) { return L.latLng(A.lat + y / mLat, A.lng + x / mLon); }
+            var Bx = (B.lng - A.lng) * mLon, By = (B.lat - A.lat) * mLat;
+
+            var usx = Math.sin(stbdHeading * rad), usy = Math.cos(stbdHeading * rad);
+            var upx = Math.sin(portHeading * rad), upy = Math.cos(portHeading * rad);
+            var det = usx * upy - upx * usy;
+            if (Math.abs(det) < 1e-9) return { upwind: false };  // headings parallel (degenerate)
+
+            // Solve P·û_stbd + Q·û_port = B_vec (total metres on each tack)
+            var P = (Bx * upy - upx * By) / det;
+            var Q = (usx * By - Bx * usy) / det;
+            if (P < 0 || Q < 0) return { upwind: false };  // not a genuine windward beat
+
+            // Even tacks: count+1 segments, alternate tacks starting with the longer (favoured) tack
+            var segCount = count + 1;
+            var starboardFirst = P >= Q;
+            var nS = 0, nP = 0, j;
+            for (j = 0; j < segCount; j++) {
+                var stb = (j % 2 === 0) ? starboardFirst : !starboardFirst;
+                if (stb) nS++; else nP++;
+            }
+            var stepS = nS > 0 ? P / nS : 0;
+            var stepP = nP > 0 ? Q / nP : 0;
+
+            var segs = [], verts = [toLL(0, 0)];
+            var cx = 0, cy = 0;
+            for (j = 0; j < segCount; j++) {
+                var isStb = (j % 2 === 0) ? starboardFirst : !starboardFirst;
+                var H = isStb ? stbdHeading : portHeading;
+                var len = isStb ? stepS : stepP;
+                var nX = cx + Math.sin(H * rad) * len, nY = cy + Math.cos(H * rad) * len;
+                var fromLL = toLL(cx, cy), toPt = toLL(nX, nY);
+                segs.push({ from: fromLL, to: toPt, starboard: isStb, headingDeg: H, lenNM: len / 1852 });
+                verts.push(toPt);
+                cx = nX; cy = nY;
+            }
+            return {
+                upwind: true, segs: segs, verts: verts,
+                P: P, Q: Q, sailedNM: (P + Q) / 1852,
+                starboardFirst: starboardFirst, stbdHeading: stbdHeading, portHeading: portHeading
+            };
+        }
+
+        // Remove all tack overlay layers + hide the Tacking summary row
+        function clearTacks() {
+            routeState.tackLines.forEach(function (l) { routeLayer.removeLayer(l); });
+            routeState.tackMarkers.forEach(function (m) { routeLayer.removeLayer(m); });
+            routeState.tackLines = [];
+            routeState.tackMarkers = [];
+            var ts = document.getElementById('rTackSummary');
+            if (ts) ts.style.display = 'none';
+        }
+
+        // Draw recommended tacks for every upwind leg (only while forecast mode + checkbox on)
+        function renderTacks() {
+            clearTacks();
+            if (!routeForecastMode || !document.getElementById('rShowTacks').checked || !routeForecast) return;
+            var pts = routeState.waypoints;
+            if (pts.length < 2) return;
+
+            var theta = Math.max(30, Math.min(60, parseFloat(document.getElementById('rTackAngle').value) || 45));
+            var count = Math.max(1, Math.min(10, parseInt(document.getElementById('rTackCount').value, 10) || 4));
+            var speed = getRouteParams().speed || 6;
+
+            // NOTE (v1 approximation): each leg's wind is sampled at the rhumb-route ETA, not the
+            // (later) tacking ETA — fine for a planning aid; refine later if needed.
+            var cum = [0], i;
+            for (i = 0; i < pts.length - 1; i++) cum.push(cum[i] + distanceNM(pts[i], pts[i + 1]));
+
+            var sailedNM = 0, anyTack = false, skipped = 0;
+
+            for (i = 0; i < pts.length - 1; i++) {
+                var A = pts[i], B = pts[i + 1];
+                var rhumb = distanceNM(A, B);
+                var fc = getForecastAt(cum[i] + rhumb / 2);
+                if (!fc || fc.beyond || fc.windDir == null) { sailedNM += rhumb; skipped++; continue; }
+
+                var sol = solveTacks(A, B, fc.windDir, theta, count);
+                if (!sol.upwind) { sailedNM += rhumb; continue; }
+                anyTack = true;
+
+                var legStartSailed = sailedNM;
+                sol.segs.forEach(function (seg) {
+                    var line = L.polyline([seg.from, seg.to], {
+                        color: seg.starboard ? '#2e9d3a' : '#e53935',
+                        weight: 3, opacity: 0.9, dashArray: '2,8', lineCap: 'round', interactive: false
+                    });
+                    routeLayer.addLayer(line);
+                    routeState.tackLines.push(line);
+                });
+
+                var cumLenNM = 0;
+                for (var v = 0; v < sol.segs.length; v++) {
+                    cumLenNM += sol.segs[v].lenNM;
+                    if (v < sol.segs.length - 1) {  // interior vertex = a tack point
+                        var nextSeg = sol.segs[v + 1];
+                        var toTack = nextSeg.starboard ? 'starboard' : 'port';
+                        var etaEpoch = routeForecast.departureEpoch + ((legStartSailed + cumLenNM) / speed) * 3600000;
+                        var etaStr = new Date(etaEpoch).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                        var mk = L.circleMarker(sol.segs[v].to, {
+                            radius: 6, fillColor: '#fff', fillOpacity: 1,
+                            color: toTack === 'starboard' ? '#2e9d3a' : '#e53935', weight: 3, opacity: 1
+                        });
+                        mk.bindPopup('<div class="wind-popup"><div class="popup-name">Tack to ' + toTack + '</div>' +
+                            '<div class="popup-detail">New heading: ' + Math.round(nextSeg.headingDeg) + '° ' +
+                            dirToCompass(nextSeg.headingDeg) + '</div>' +
+                            '<div class="popup-detail">~' + etaStr + '</div></div>', { maxWidth: 220 });
+                        routeLayer.addLayer(mk);
+                        routeState.tackMarkers.push(mk);
+                    }
+                }
+
+                // Wind arrow at the leg midpoint (reuse the existing rotated-SVG icon)
+                var midLL = L.latLng((A.lat + B.lat) / 2, (A.lng + B.lng) / 2);
+                var arrow = L.marker(midLL, {
+                    icon: createWindArrowIcon(fc.windSpeed || 10, fc.windDir, '#0066ff'),
+                    interactive: false, keyboard: false
+                });
+                routeLayer.addLayer(arrow);
+                routeState.tackMarkers.push(arrow);
+
+                sailedNM += sol.sailedNM;
+            }
+
+            var ts = document.getElementById('rTackSummary');
+            if (anyTack) {
+                var hrs = sailedNM / speed, h = Math.floor(hrs), m = Math.round((hrs - h) * 60);
+                if (m === 60) { h++; m = 0; }
+                document.getElementById('rTackDist').textContent = sailedNM.toFixed(1);
+                var etaTxt = h + 'h ' + (m < 10 ? '0' : '') + m + 'm';
+                var startVal = document.getElementById('rStartTime').value;
+                if (startVal) {
+                    var dep = new Date(startVal).getTime();
+                    if (!isNaN(dep)) etaTxt += ' → ' + new Date(dep + hrs * 3600000)
+                        .toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                }
+                document.getElementById('rTackETA').textContent = etaTxt;
+                ts.style.display = '';
+            } else {
+                ts.style.display = 'none';
+                setRouteStatus('No upwind legs need tacking at this wind' +
+                    (skipped ? ' (some legs beyond forecast range).' : '.'), 'info');
             }
         }
 
@@ -3949,6 +4137,7 @@
             var fbtn = document.getElementById('rForecastBtn');
             fbtn.disabled = true;
             fbtn.classList.remove('active');
+            clearTacks();
             map.closePopup();
         }
         window.clearRoute = clearRoute;
@@ -4109,13 +4298,18 @@
 
         // Recalculate ETA when speed changes (no forecast refetch — getForecastAt reads live speed)
         document.getElementById('rSpeed').addEventListener('change', function () {
-            if (routeState.waypoints.length >= 2) updateRouteLabels();
+            if (routeState.waypoints.length >= 2) { updateRouteLabels(); renderTacks(); }
         });
 
         // Departure time set/changed → (re)prefetch the route forecast
         document.getElementById('rStartTime').addEventListener('change', function () {
             updateRouteLabels();
             if (routeState.waypoints.length >= 2) prefetchRouteForecast();
+        });
+
+        // Tack controls → re-draw the recommended-tacks overlay (no refetch)
+        ['rTackAngle', 'rTackCount', 'rShowTacks'].forEach(function (id) {
+            document.getElementById(id).addEventListener('change', renderTacks);
         });
 
         // ============================================================
