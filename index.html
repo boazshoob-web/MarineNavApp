@@ -2165,20 +2165,22 @@
             return dirs[Math.round(deg / 22.5) % 16];
         }
 
-        function createWindArrowIcon(speed, direction, color) {
+        // Rotated wind-arrow SVG string (flow direction = where the wind blows TO)
+        function windArrowSvg(direction, size, color) {
             var flowDeg = (direction + 180) % 360;
-            var size = Math.min(44, Math.max(24, 20 + speed * 0.7));
-            var half = size / 2;
-
-            var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" ' +
+            return '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" ' +
                 'viewBox="0 0 40 40" style="transform:rotate(' + flowDeg + 'deg)">' +
                 '<circle cx="20" cy="20" r="4" fill="' + color + '" opacity="0.25"/>' +
                 '<line x1="20" y1="28" x2="20" y2="10" stroke="' + color + '" stroke-width="2.8" stroke-linecap="round"/>' +
                 '<polygon points="20,5 14,14 26,14" fill="' + color + '"/>' +
                 '</svg>';
+        }
 
+        function createWindArrowIcon(speed, direction, color) {
+            var size = Math.min(44, Math.max(24, 20 + speed * 0.7));
+            var half = size / 2;
             return L.divIcon({
-                html: svg,
+                html: windArrowSvg(direction, size, color),
                 className: 'wind-arrow',
                 iconSize: [size, size],
                 iconAnchor: [half, half]
@@ -3406,16 +3408,24 @@
         }
 
         // ---- Update distance labels on segments ----
+        // Is the recommended-tacks overlay currently active? (rhumb labels give way to tack labels)
+        function tacksActive() {
+            var cb = document.getElementById('rShowTacks');
+            return !!(routeForecastMode && cb && cb.checked && routeForecast);
+        }
+
         function updateRouteLabels() {
             routeState.labels.forEach(function (lbl) { routeLayer.removeLayer(lbl); });
             routeState.labels = [];
             var pts = routeState.waypoints;
             var totalNM = 0;
+            var suppressLabels = tacksActive();  // tack labels replace rhumb labels while active
 
             for (var i = 0; i < pts.length - 1; i++) {
                 var a = pts[i], b = pts[i + 1];
                 var nm = distanceNM(a, b);
                 totalNM += nm;
+                if (suppressLabels) continue;
                 var midLat = (a.lat + b.lat) / 2;
                 var midLng = (a.lng + b.lng) / 2;
 
@@ -3462,6 +3472,9 @@
             } else {
                 summaryEl.style.display = 'none';
             }
+
+            // Keep the tacks overlay + its labels in sync (renderTacks bails/clears when inactive)
+            renderTacks();
         }
 
         // ---- Sync polyline from waypoints ----
@@ -3723,8 +3736,7 @@
                 };
                 fbtn.disabled = false;
                 setRouteStatus('Route forecast ready — enable Forecast Mode and tap the route.', 'ok');
-                updateRouteLabels();
-                renderTacks();
+                updateRouteLabels();  // appends renderTacks()
             }).catch(function (err) {
                 routeForecast = null;
                 fbtn.disabled = true;
@@ -3852,13 +3864,12 @@
             document.getElementById('rForecastBtn').classList.toggle('active', routeForecastMode);
             if (routeForecastMode) {
                 setRouteStatus('Forecast Mode on — tap the route line for conditions at ETA.', 'info');
-                renderTacks();
             } else {
                 map.getContainer().style.cursor = '';
                 map.closePopup();
-                clearTacks();
                 setRouteStatus('Forecast Mode off. Tap the route to insert waypoints.', '');
             }
+            updateRouteLabels();  // add/remove tack overlay + labels, restore rhumb labels when off
         }
         window.toggleForecastMode = toggleForecastMode;
 
@@ -3944,12 +3955,16 @@
                 var len = isStb ? stepS : stepP;
                 var nX = cx + Math.sin(H * rad) * len, nY = cy + Math.cos(H * rad) * len;
                 var fromLL = toLL(cx, cy), toPt = toLL(nX, nY);
-                segs.push({ from: fromLL, to: toPt, starboard: isStb, headingDeg: H, lenNM: len / 1852 });
+                // Colour/side by TURN DIRECTION relative to the course to the mark:
+                // heading to the right of course → green, to the left → red.
+                var signed = ((H - courseAB + 540) % 360) - 180;
+                segs.push({ from: fromLL, to: toPt, starboard: isStb, headingDeg: H,
+                    lenNM: len / 1852, rightOfCourse: signed > 0 });
                 verts.push(toPt);
                 cx = nX; cy = nY;
             }
             return {
-                upwind: true, segs: segs, verts: verts,
+                upwind: true, segs: segs, verts: verts, courseAB: courseAB,
                 P: P, Q: Q, sailedNM: (P + Q) / 1852,
                 starboardFirst: starboardFirst, stbdHeading: stbdHeading, portHeading: portHeading
             };
@@ -3981,22 +3996,55 @@
             var cum = [0], i;
             for (i = 0; i < pts.length - 1; i++) cum.push(cum[i] + distanceNM(pts[i], pts[i + 1]));
 
+            var GREEN = '#2e9d3a', RED = '#e53935', BLUE = '#0066ff';
+
+            // Compact 2-row label: row1 = wind arrow + speed (if wind known), row2 = course · length
+            function addTwoRowLabel(latlng, windDir, windSpeed, course, lenNM, borderColor) {
+                var row1 = (windDir != null)
+                    ? '<div style="display:flex;align-items:center;justify-content:center;gap:2px;height:16px">' +
+                        windArrowSvg(windDir, 16, BLUE) + '<span>' +
+                        (windSpeed != null ? Math.round(windSpeed) : '–') + ' kt</span></div>'
+                    : '';
+                var html = '<div style="background:rgba(255,255,255,0.95);border:1.5px solid ' + borderColor +
+                    ';border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700;color:#333;white-space:nowrap;' +
+                    'text-align:center;line-height:13px;box-shadow:0 1px 4px rgba(0,0,0,0.18)">' +
+                    row1 + '<div>' + Math.round(course) + '° · ' + lenNM.toFixed(1) + ' nm</div></div>';
+                var mk = L.marker(latlng, {
+                    interactive: false, keyboard: false,
+                    icon: L.divIcon({ className: 'route-label', iconSize: [74, 30], iconAnchor: [37, 15], html: html })
+                });
+                routeLayer.addLayer(mk);
+                routeState.tackMarkers.push(mk);
+            }
+            function segMid(s) { return L.latLng((s.from.lat + s.to.lat) / 2, (s.from.lng + s.to.lng) / 2); }
+
             var sailedNM = 0, anyTack = false, skipped = 0;
 
             for (i = 0; i < pts.length - 1; i++) {
                 var A = pts[i], B = pts[i + 1];
                 var rhumb = distanceNM(A, B);
+                var courseAB = bearingDeg(A.lat, A.lng, B.lat, B.lng);
+                var midLL = L.latLng((A.lat + B.lat) / 2, (A.lng + B.lng) / 2);
                 var fc = getForecastAt(cum[i] + rhumb / 2);
-                if (!fc || fc.beyond || fc.windDir == null) { sailedNM += rhumb; skipped++; continue; }
+
+                // No wind for this leg → sail direct, label course + length only
+                if (!fc || fc.beyond || fc.windDir == null) {
+                    addTwoRowLabel(midLL, null, null, courseAB, rhumb, BLUE);
+                    sailedNM += rhumb; skipped++; continue;
+                }
 
                 var sol = solveTacks(A, B, fc.windDir, theta, count);
-                if (!sol.upwind) { sailedNM += rhumb; continue; }
+                if (!sol.upwind) {
+                    // Sailable directly (not a beat) → one 2-row label on the rhumb line
+                    addTwoRowLabel(midLL, fc.windDir, fc.windSpeed, courseAB, rhumb, BLUE);
+                    sailedNM += rhumb; continue;
+                }
                 anyTack = true;
 
                 var legStartSailed = sailedNM;
                 sol.segs.forEach(function (seg) {
                     var line = L.polyline([seg.from, seg.to], {
-                        color: seg.starboard ? '#2e9d3a' : '#e53935',
+                        color: seg.rightOfCourse ? GREEN : RED,
                         weight: 3, opacity: 0.9, dashArray: '2,8', lineCap: 'round', interactive: false
                     });
                     routeLayer.addLayer(line);
@@ -4008,30 +4056,31 @@
                     cumLenNM += sol.segs[v].lenNM;
                     if (v < sol.segs.length - 1) {  // interior vertex = a tack point
                         var nextSeg = sol.segs[v + 1];
-                        var toTack = nextSeg.starboard ? 'starboard' : 'port';
+                        var toColor = nextSeg.rightOfCourse ? GREEN : RED;
+                        var toSide = nextSeg.rightOfCourse ? 'right' : 'left';
                         var etaEpoch = routeForecast.departureEpoch + ((legStartSailed + cumLenNM) / speed) * 3600000;
                         var etaStr = new Date(etaEpoch).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
                         var mk = L.circleMarker(sol.segs[v].to, {
                             radius: 6, fillColor: '#fff', fillOpacity: 1,
-                            color: toTack === 'starboard' ? '#2e9d3a' : '#e53935', weight: 3, opacity: 1
+                            color: toColor, weight: 3, opacity: 1
                         });
-                        mk.bindPopup('<div class="wind-popup"><div class="popup-name">Tack to ' + toTack + '</div>' +
-                            '<div class="popup-detail">New heading: ' + Math.round(nextSeg.headingDeg) + '° ' +
-                            dirToCompass(nextSeg.headingDeg) + '</div>' +
+                        mk.bindPopup('<div class="wind-popup"><div class="popup-name">Tack</div>' +
+                            '<div class="popup-detail">Come onto ' + Math.round(nextSeg.headingDeg) + '° ' +
+                            dirToCompass(nextSeg.headingDeg) + ' (' + toSide + ')</div>' +
                             '<div class="popup-detail">~' + etaStr + '</div></div>', { maxWidth: 220 });
                         routeLayer.addLayer(mk);
                         routeState.tackMarkers.push(mk);
                     }
                 }
 
-                // Wind arrow at the leg midpoint (reuse the existing rotated-SVG icon)
-                var midLL = L.latLng((A.lat + B.lat) / 2, (A.lng + B.lng) / 2);
-                var arrow = L.marker(midLL, {
-                    icon: createWindArrowIcon(fc.windSpeed || 10, fc.windDir, '#0066ff'),
-                    interactive: false, keyboard: false
+                // One 2-row label per tack direction: first green (right) + first red (left) segment
+                var greenSeg = null, redSeg = null;
+                sol.segs.forEach(function (seg) {
+                    if (seg.rightOfCourse) { if (!greenSeg) greenSeg = seg; }
+                    else { if (!redSeg) redSeg = seg; }
                 });
-                routeLayer.addLayer(arrow);
-                routeState.tackMarkers.push(arrow);
+                if (greenSeg) addTwoRowLabel(segMid(greenSeg), fc.windDir, fc.windSpeed, greenSeg.headingDeg, greenSeg.lenNM, GREEN);
+                if (redSeg) addTwoRowLabel(segMid(redSeg), fc.windDir, fc.windSpeed, redSeg.headingDeg, redSeg.lenNM, RED);
 
                 sailedNM += sol.sailedNM;
             }
@@ -4298,7 +4347,7 @@
 
         // Recalculate ETA when speed changes (no forecast refetch — getForecastAt reads live speed)
         document.getElementById('rSpeed').addEventListener('change', function () {
-            if (routeState.waypoints.length >= 2) { updateRouteLabels(); renderTacks(); }
+            if (routeState.waypoints.length >= 2) updateRouteLabels();  // appends renderTacks()
         });
 
         // Departure time set/changed → (re)prefetch the route forecast
@@ -4307,9 +4356,12 @@
             if (routeState.waypoints.length >= 2) prefetchRouteForecast();
         });
 
-        // Tack controls → re-draw the recommended-tacks overlay (no refetch)
+        // Tack controls → refresh labels + tacks overlay (no refetch).
+        // Route via updateRouteLabels so toggling the checkbox also adds/removes the rhumb labels.
         ['rTackAngle', 'rTackCount', 'rShowTacks'].forEach(function (id) {
-            document.getElementById(id).addEventListener('change', renderTacks);
+            document.getElementById(id).addEventListener('change', function () {
+                if (routeState.waypoints.length >= 2) updateRouteLabels();
+            });
         });
 
         // ============================================================
