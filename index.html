@@ -1779,7 +1779,11 @@
             zoomControl: true
         });
 
-        var cartoLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        // CARTO basemap API key (public, client-side by design — scoped to our domain).
+        // Raster basemaps require a key since Aug 2026; without it tiles are watermarked.
+        var CARTO_KEY = 'cb1_2qct_1_63fe0b76f12270455ca02991';
+
+        var cartoLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=' + CARTO_KEY, {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a> | Data: <a href="https://open-meteo.com/">Open-Meteo</a> | Cams: <a href="https://beachcam.co.il">BeachCam.co.il</a> | AI: <a href="https://ai.google.dev/">Gemini</a>',
             subdomains: 'abcd',
             maxZoom: 19
@@ -4726,7 +4730,7 @@
 
         function tileUrl(z, x, y) {
             var sub = ['a', 'b', 'c', 'd'][Math.abs(x + y) % 4];
-            return 'https://' + sub + '.basemaps.cartocdn.com/light_all/' + z + '/' + x + '/' + y + '.png';
+            return 'https://' + sub + '.basemaps.cartocdn.com/light_all/' + z + '/' + x + '/' + y + '.png?key=' + CARTO_KEY;
         }
 
         function seaMarkTileUrl(z, x, y) {
